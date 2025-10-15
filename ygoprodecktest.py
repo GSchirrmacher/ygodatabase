@@ -7,7 +7,6 @@ import os
 API_URL = "http://db.ygoprodeck.com/api/v7/cardinfo.php"
 MAX_REQUESTS_PER_SECOND = 20
 DELAY = 1 / MAX_REQUESTS_PER_SECOND  # = 0.05 Sek. Pause zwischen Requests
-card_ids = [46986414, 89631139, 74677422]
 IMAGES_DIR = "img"
 IMAGES_CROPPED_DIR = "img_cropped"
 
@@ -112,23 +111,23 @@ def save_image_locally(card_id, image_id, image_url):
         print(f"Error saving {image_url}: {e}")
         return None
     
-def save_image_cropped_locally(card_id, image_id, image_url):
-    if not image_url:
+def save_image_cropped_locally(card_id, image_cropped_id, image_url_cropped):
+    if not image_url_cropped:
         return None
-    filename = f"{card_id}_{image_id}.jpg"
+    filename = f"{card_id}_{image_cropped_id}.jpg"
     filepath = os.path.join(IMAGES_CROPPED_DIR, filename)
     
     if os.path.exists(filepath):
         return filepath  # schon vorhanden, überspringen
 
     try:
-        r = requests.get(image_url, timeout=10)
+        r = requests.get(image_url_cropped, timeout=10)
         r.raise_for_status()
         with open(filepath, "wb") as f:
             f.write(r.content)
         return filepath
     except Exception as e:
-        print(f"Error saving {image_url}: {e}")
+        print(f"Error saving {image_url_cropped}: {e}")
         return None
 
 def fetch_cards():
@@ -180,7 +179,7 @@ for i, card in enumerate(cards, start=1):
                 conn.commit()
 
     # Cropped Images
-    for img_cropped in card.get("card_images_cropped", []):
+    for img_cropped in card.get("card_images", []):
         if not image_cropped_exists(card_id, img_cropped["id"]):
             local_path = save_image_cropped_locally(card_id, img_cropped["id"], img_cropped["image_url_cropped"])
             if local_path:
