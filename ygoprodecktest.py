@@ -9,8 +9,10 @@ MAX_REQUESTS_PER_SECOND = 20
 DELAY = 1 / MAX_REQUESTS_PER_SECOND  # = 0.05 Sek. Pause zwischen Requests
 card_ids = [46986414, 89631139, 74677422]
 IMAGES_DIR = "img"
+IMAGES_CROPPED_DIR = "img_cropped"
 
 os.makedirs(IMAGES_DIR, exist_ok=True)
+os.makedirs(IMAGES_CROPPED_DIR, exist_ok=True)
 conn = sqlite3.connect(r"E:\ygodatabase\cards.db")
 cursor = conn.cursor()
 
@@ -71,18 +73,29 @@ CREATE TABLE IF NOT EXISTS card_prices (
 conn.commit()
 
 def card_exists(card_id):
-    cursor.execute("SELECT 1 FROM cards WHERE id = ?", (card_id,))
+    cursor.execute("""
+        SELECT 1 FROM cards 
+        WHERE id = ?
+    """, (card_id,))
     return cursor.fetchone() is not None
 
 def image_exists(card_id, image_id):
-    cursor.execute("SELECT 1 FROM card_images WHERE card_id = ? AND image_id = ?", (card_id, image_id))
+    cursor.execute("""
+        SELECT 1 FROM card_images 
+        WHERE card_id = ? AND image_id = ?
+    """, (card_id, image_id))
     return cursor.fetchone() is not None
 
 def image_cropped_exists(card_id, image_cropped_id):
-    cursor.execute("SELECT 1 FROM card_images_cropped WHERE card_id = ? AND image_cropped_id = ?", (card_id, image_cropped_id))
+    cursor.execute("""
+        SELECT 1 FROM card_images_cropped 
+        WHERE card_id = ? AND image_cropped_id = ?
+    """, (card_id, image_cropped_id))
     return cursor.fetchone() is not None
 
 def save_image_locally(card_id, image_id, image_url):
+    if not image_url:
+        return None
     filename = f"{card_id}_{image_id}.jpg"
     filepath = os.path.join(IMAGES_DIR, filename)
 
@@ -98,25 +111,35 @@ def save_image_locally(card_id, image_id, image_url):
     except Exception as e:
         print(f"Error saving {image_url}: {e}")
         return None
-
-def fetch_card(card_id):
-    url = f"https://db.ygoprodeck.com/api/v7/cardinfo.php?id={card_id}"
-    try:
-        r = requests.get(url, timeout=10)
-        r.raise_for_status()
-        data = r.json().get("data", [])[0]
-        return data
-    except Exception as e:
-        print(f"Error on calling of card: {card_id}: {e}")
-        return None
     
-print("Loading data from API ...")
-response = requests.get(API_URL)
-if response.status_code != 200:
-    raise SystemExit(f"Error API call: {response.status_code}")
+def save_image_cropped_locally(card_id, image_id, image_url):
+    if not image_url:
+        return None
+    filename = f"{card_id}_{image_id}.jpg"
+    filepath = os.path.join(IMAGES_CROPPED_DIR, filename)
+    
+    if os.path.exists(filepath):
+        return filepath  # schon vorhanden, überspringen
 
-data = response.json()
-cards = data.get("data", [])
+    try:
+        r = requests.get(image_url, timeout=10)
+        r.raise_for_status()
+        with open(filepath, "wb") as f:
+            f.write(r.content)
+        return filepath
+    except Exception as e:
+        print(f"Error saving {image_url}: {e}")
+        return None
+
+def fetch_cards():
+    print("Loading card data from YGOPRODeck API ...")
+    r = requests.get(API_URL)
+    if r.status_code != 200:
+        raise SystemExit(f"Error with API call: {r.status_code}")
+    data = r.json()
+    return data.get("data", [])
+    
+cards = fetch_cards()
 print(f"{len(cards)} cards found.\n")
 
 for i, card in enumerate(cards, start=1):
@@ -141,65 +164,65 @@ for i, card in enumerate(cards, start=1):
         ))
         conn.commit()
 
-        # Images
-        for img in card.get("card_images", []):
-            if not image_exists(card_id, img["id"]):
-                local_path = save_image_locally(card_id, img["id"], img["image_url"])
-                if local_path:
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO card_images (card_id, image_id, local_path)
-                        VALUES(?, ?, ?)
-                    """, (
-                        card_id, 
-                        img["id"], 
-                        local_path
-                    ))
-                    conn.commit()
+    # Images
+    for img in card.get("card_images", []):
+        if not image_exists(card_id, img["id"]):
+            local_path = save_image_locally(card_id, img["id"], img["image_url"])
+            if local_path:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO card_images (card_id, image_id, local_path)
+                    VALUES(?, ?, ?)
+                """, (
+                    card_id, 
+                    img["id"], 
+                    local_path
+                ))
+                conn.commit()
 
-        # Cropped Images
-        for img_cropped in card.get("card_images_cropped", []):
-            if not image_cropped_exists(card_id, img_cropped["id"]):
-                local_path = save_image_locally(card_id, img_cropped["id"], img_cropped["image_url_cropped"])
-                if local_path:
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO card_images_cropped (card_id, image_cropped_id, local_path)
-                        VALUES(?, ?, ?)
-                    """, (
-                        card_id, 
-                        img["id"], 
-                        local_path
-                    ))
-                    conn.commit()
+    # Cropped Images
+    for img_cropped in card.get("card_images_cropped", []):
+        if not image_cropped_exists(card_id, img_cropped["id"]):
+            local_path = save_image_cropped_locally(card_id, img_cropped["id"], img_cropped["image_url_cropped"])
+            if local_path:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO card_images_cropped (card_id, image_cropped_id, local_path)
+                    VALUES(?, ?, ?)
+                """, (
+                    card_id, 
+                    img_cropped["id"], 
+                    local_path
+                ))
+                conn.commit()
 
-        # Sets
-        for s in card.get("card_sets", []):
-            cursor.execute("""
-                INSERT INTO card_sets (card_id, set_name, set_code, set_rarity, set_price)
-                VALUES(?, ?, ?, ?, ?)
-            """, (
-                card_id, 
-                s.get("set_name"), 
-                s.get("set_code"), 
-                s.get("set_rarity"), 
-                s.get("set_price")
-            ))
-            conn.commit()
+    # Sets
+    for s in card.get("card_sets", []):
+        cursor.execute("""
+            INSERT INTO card_sets (card_id, set_name, set_code, set_rarity, set_price)
+            VALUES(?, ?, ?, ?, ?)
+        """, (
+            card_id, 
+            s.get("set_name"), 
+            s.get("set_code"), 
+            s.get("set_rarity"), 
+            s.get("set_price")
+        ))
+        conn.commit()
 
-        # Prices
-        for p in card.get("card_prices", []):
-            cursor.execute("""
-                INSERT INTO card_prices (card_id, tcgplayer_price, ebay_price, amazon_price, cardmarket_price)
-                VALUES(?, ?, ?, ?, ?)
-            """, (
-                card_id, 
-                p.get("tcgplayer_price"), 
-                p.get("ebay_price"), 
-                p.get("amazon_price"), 
-                p.get("cardmarket_price")
-            ))
-            conn.commit()
+    # Prices
+    for p in card.get("card_prices", []):
+        cursor.execute("""
+            INSERT INTO card_prices (card_id, tcgplayer_price, ebay_price, amazon_price, cardmarket_price)
+            VALUES(?, ?, ?, ?, ?)
+        """, (
+            card_id, 
+            p.get("tcgplayer_price"), 
+            p.get("ebay_price"), 
+            p.get("amazon_price"), 
+            p.get("cardmarket_price")
+        ))
+        conn.commit()
 
-        print(f"[{i}/{len(cards)}] Card {card.get('name')} safed.")
+    print(f"[{i}/{len(cards)}] Card {card.get('name')} safed.")
 
     # Rate limit
     if i % 100 == 0:
