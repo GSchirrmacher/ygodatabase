@@ -1,39 +1,28 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <link rel="stylesheet" href="styles.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
-    <script type="module" src="/main.js" defer></script>
+    <title>Rust + SQLite App</title>
+    <script type="module">
+      import { invoke } from "@tauri-apps/api";
+
+      async function loadUsers() {
+        const users = await invoke("get_users");
+        document.getElementById("users").innerHTML = users.map(u => `<li>${u}</li>`).join("");
+      }
+
+      async function addUser() {
+        const name = document.getElementById("name").value;
+        await invoke("add_user", { name });
+        loadUsers();
+      }
+    </script>
   </head>
-
   <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
-
-      <div class="row">
-        <a href="https://tauri.app" target="_blank">
-          <img src="/assets/tauri.svg" class="logo tauri" alt="Tauri logo" />
-        </a>
-        <a
-          href="https://developer.mozilla.org/en-US/docs/Web/JavaScript"
-          target="_blank"
-        >
-          <img
-            src="/assets/javascript.svg"
-            class="logo vanilla"
-            alt="JavaScript logo"
-          />
-        </a>
-      </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
-
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
-    </main>
+    <h1>Rust + SQLite Demo</h1>
+    <input id="name" placeholder="Name" />
+    <button onclick="addUser()">Add</button>
+    <ul id="users"></ul>
+    <button onclick="loadUsers()">Reload</button>
   </body>
 </html>
