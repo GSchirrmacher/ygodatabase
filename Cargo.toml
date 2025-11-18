@@ -1,6 +1,0 @@
-[workspace]
-members = [
-    "ygodatabase-backend",
-    "ygodatabase-backend/src-tauri"
-]
-resolver = "2"
