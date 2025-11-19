@@ -1,18 +1,16 @@
 import requests
 import pandas as pd
 import sqlite3
-import time
 import os
+import json
 
-API_URL = "http://db.ygoprodeck.com/api/v7/cardinfo.php"
-MAX_REQUESTS_PER_SECOND = 20
-DELAY = 1 / MAX_REQUESTS_PER_SECOND  # = 0.05 Sek. Pause zwischen Requests
+API_URL = "http://db.ygoprodeck.com/api/v7/cardinfo.php?misc=yes&format=genesys"
 IMAGES_DIR = "img"
 IMAGES_CROPPED_DIR = "img_cropped"
 
 os.makedirs(IMAGES_DIR, exist_ok=True)
 os.makedirs(IMAGES_CROPPED_DIR, exist_ok=True)
-conn = sqlite3.connect(r"E:\ygodatabase\cards.db")
+conn = sqlite3.connect(r"E:\ygodatabase\cards.db") # <- change to desired output location
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -20,15 +18,27 @@ CREATE TABLE IF NOT EXISTS cards (
     id INTEGER PRIMARY KEY,
     name TEXT,
     type TEXT,
+    typeline TEXT,
     frameType TEXT,
     desc TEXT,
     atk INTEGER,
     def INTEGER,
     level INTEGER,
+    scale INTEGER,
+    linkval INTEGER,
+    linkmarkers TEXT,
     race TEXT,
     attribute TEXT,
-    archetype TEXT
-)
+    archetype TEXT,
+    banlist_info TEXT,
+    formats TEXT,
+    ocg_date TEXT,
+    tcg_date TEXT,
+    genesys_points INTEGER,
+    md_rarity TEXT, 
+    has_effect INTEGER, 
+    treated_as TEXT
+);
 """)
 
 cursor.execute("""
@@ -55,7 +65,8 @@ CREATE TABLE IF NOT EXISTS card_sets (
     set_name TEXT,
     set_code TEXT,
     set_rarity TEXT,
-    set_price TEXT
+    set_price TEXT,
+    collection_amount INTEGER
 )
 """)
 
@@ -65,7 +76,8 @@ CREATE TABLE IF NOT EXISTS card_prices (
     tcgplayer_price TEXT,
     ebay_price TEXT,
     amazon_price TEXT,
-    cardmarket_price TEXT
+    cardmarket_price TEXT,
+    collection_amount INTEGER
 )
 """)
 
@@ -141,27 +153,121 @@ def fetch_cards():
 cards = fetch_cards()
 print(f"{len(cards)} cards found.\n")
 
+
 for i, card in enumerate(cards, start=1):
     card_id = card.get("id")
     if not card_exists(card_id):
-        # Cards
+        misc = card.get("misc_info", [])
+
+    misc = card.get("misc_info") or card.get("misc") or []
+
+    m0 = {}
+    genesys_points = None
+    ocg_date = None
+    tcg_date = None
+    formats = None
+    
+    
+    if misc and isinstance(misc, list):
+        m0 = misc[0]
+        genesys_points = m0.get("genesys_points")
+        ocg_date = m0.get("ocg_date")
+        tcg_date = m0.get("tcg_date")
+        formats = m0.get("formats")
+        md_rarity = m0.get("md_rarity")
+        has_effect = m0.get("has_effect")
+        treated_as = m0.get("treated_as")
+
+    if not card_exists(card_id):
         cursor.execute("""
-            INSERT INTO cards (id, name, type, frameType, desc, atk, def, level, race, attribute, archetype)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO cards (
+                id, name, type, typeline, frameType, desc,
+                atk, def, level, scale, linkval, linkmarkers,
+                race, attribute, archetype, banlist_info,
+                formats, ocg_date, tcg_date, genesys_points,
+                md_rarity, has_effect, treated_as
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             card_id,
             card.get("name"),
             card.get("type"),
+            json.dumps(card.get("typeline")),
             card.get("frameType"),
             card.get("desc"),
             card.get("atk"),
             card.get("def"),
             card.get("level"),
+            card.get("scale"),
+            card.get("linkval"),
+            json.dumps(card.get("linkmarkers")),
             card.get("race"),
             card.get("attribute"),
-            card.get("archetype")
+            card.get("archetype"),
+            json.dumps(card.get("banlist_info")),
+            json.dumps(formats),
+            ocg_date,
+            tcg_date,
+            genesys_points,
+            md_rarity, 
+            has_effect, 
+            treated_as
         ))
-        conn.commit()
+
+    else:
+        cursor.execute("""
+            UPDATE cards
+            SET
+                name = ?,
+                type = ?,
+                typeline = ?,
+                frameType = ?,
+                desc = ?,
+                atk = ?,
+                def = ?,
+                level = ?,
+                scale = ?,
+                linkval = ?,
+                linkmarkers = ?,
+                race = ?,
+                attribute = ?,
+                archetype = ?,
+                banlist_info = ?,
+                formats = ?,
+                ocg_date = ?,
+                tcg_date = ?,
+                genesys_points = ?,
+                md_rarity = ?, 
+                has_effect = ?, 
+                treated_as = ?
+            WHERE id = ?
+        """, (
+            card.get("name"),
+            card.get("type"),
+            json.dumps(card.get("typeline")),
+            card.get("frameType"),
+            card.get("desc"),
+            card.get("atk"),
+            card.get("def"),
+            card.get("level"),
+            card.get("scale"),
+            card.get("linkval"),
+            json.dumps(card.get("linkmarkers")),
+            card.get("race"),
+            card.get("attribute"),
+            card.get("archetype"),
+            json.dumps(card.get("banlist_info")),
+            json.dumps(formats),
+            ocg_date,
+            tcg_date,
+            genesys_points,
+            card_id,
+            md_rarity, 
+            has_effect, 
+            treated_as
+        ))
+
+    conn.commit()
 
     # Images
     for img in card.get("card_images", []):
@@ -196,8 +302,8 @@ for i, card in enumerate(cards, start=1):
     # Sets
     for s in card.get("card_sets", []):
         cursor.execute("""
-            INSERT INTO card_sets (card_id, set_name, set_code, set_rarity, set_price)
-            VALUES(?, ?, ?, ?, ?)
+            INSERT INTO card_sets (card_id, set_name, set_code, set_rarity, set_price, collection_amount)
+            VALUES(?, ?, ?, ?, ?, 0)
         """, (
             card_id, 
             s.get("set_name"), 
@@ -210,8 +316,8 @@ for i, card in enumerate(cards, start=1):
     # Prices
     for p in card.get("card_prices", []):
         cursor.execute("""
-            INSERT INTO card_prices (card_id, tcgplayer_price, ebay_price, amazon_price, cardmarket_price)
-            VALUES(?, ?, ?, ?, ?)
+            INSERT INTO card_prices (card_id, tcgplayer_price, ebay_price, amazon_price, cardmarket_price, collection_amount)
+            VALUES(?, ?, ?, ?, ?, 0)
         """, (
             card_id, 
             p.get("tcgplayer_price"), 
@@ -222,12 +328,6 @@ for i, card in enumerate(cards, start=1):
         conn.commit()
 
     print(f"[{i}/{len(cards)}] Card {card.get('name')} safed.")
-
-    # Rate limit
-    if i % 100 == 0:
-        print(f"{i} cards done...")
-    time.sleep(DELAY)
-
 
 conn.close()
 print("\nDownloaded successfully!")
