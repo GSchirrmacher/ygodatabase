@@ -1,74 +1,43 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Mutex;
-
-use base64::{engine::general_purpose, Engine as _};
+use rusqlite::{Connection, Result};
 use serde::Serialize;
-use tauri::State;
-use rusqlite::{Connection, OpenFlags};
 
 #[derive(Serialize)]
-struct CardImage {
-    card_id: i32,
-    base64: String,
+struct Card {
+    id: i64,
+    name: String,
+    card_type: String,
 }
 
-struct DbConn(Mutex<Connection>);
-
 #[tauri::command]
-fn get_first_10_card_images(db: State<DbConn>) -> Result<Vec<CardImage>, String> {
-    let conn = db.0.lock().unwrap();
+fn get_first_cards() -> Result<Vec<Card>, String> {
+    let conn = Connection::open("E:/ygodatabase/cards.db")
+        .map_err(|e| format!("DB Fehler: {}", e))?;
 
     let mut stmt = conn
-        .prepare("SELECT card_id, url FROM card_images ORDER BY card_id LIMIT 10")
-        .map_err(|e| e.to_string())?;
+        .prepare("SELECT id, name, type FROM cards LIMIT 10")
+        .map_err(|e| format!("Query Fehler: {}", e))?;
 
     let rows = stmt
         .query_map([], |row| {
-            let id: i32 = row.get(0)?;
-            let filename: String = row.get(1)?;
-            Ok((id, filename))
+            Ok(Card {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                card_type: row.get(2)?,
+            })
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Mapping Fehler: {}", e))?;
 
-    let mut result = Vec::new();
-
+    let mut cards = vec![];
     for row in rows {
-        let (card_id, filename) = row.map_err(|e| e.to_string())?;
-
-        // Bildpfad zusammenbauen
-        let img_path = PathBuf::from("../ygodatabase/").join(&filename);
-
-        // Datei lesen
-        let bytes = fs::read(&img_path)
-            .map_err(|e| format!("Konnte Bild nicht lesen {}: {}", filename, e))?;
-
-        // Base64
-        let encoded = general_purpose::STANDARD.encode(bytes);
-
-        result.push(CardImage {
-            card_id,
-            base64: encoded,
-        });
+        cards.push(row.map_err(|e| format!("Row Fehler: {}", e))?);
     }
 
-    Ok(result)
+    Ok(cards)
 }
-fn main() {
-    let conn = Connection::open_with_flags(
-        "/ygodatabase/cards.db",
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE
-            | rusqlite::OpenFlags::SQLITE_OPEN_CREATE
-            | rusqlite::OpenFlags::SQLITE_OPEN_FULL_MUTEX,
-    )
-    .expect("Datenbank konnte nicht geöffnet werden");
 
+fn main() {
     tauri::Builder::default()
-        .manage(DbConn(Mutex::new(conn)))
-        .invoke_handler(tauri::generate_handler![get_first_10_card_images])
+        .invoke_handler(tauri::generate_handler![get_first_cards])
         .run(tauri::generate_context!())
-        .expect("Fehler beim Starten");
+        .expect("error while running tauri application");
 }

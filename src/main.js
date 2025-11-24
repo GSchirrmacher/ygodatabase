@@ -1,16 +1,21 @@
-import { invoke } from "@tauri-apps/api/tauri";
+import { invoke } from "tauri://";
 
-async function loadImages() {
-  const container = document.getElementById("images");
-  const images = await invoke("get_first_10_card_images");
+async function load() {
+  const data = await invoke("get_first_cards");
+  console.log(data);
 
-  images.forEach(img => {
-    const elem = document.createElement("img");
-    elem.src = `data:image/jpeg;base64,${img.base64}`;
-    elem.style.width = "150px";
-    elem.style.margin = "10px";
-    container.appendChild(elem);
+  const tbody = document.getElementById("cards");
+  tbody.innerHTML = "";
+
+  data.forEach(card => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${card.id}</td>
+      <td>${card.name}</td>
+      <td>${card.card_type}</td>
+    `;
+    tbody.appendChild(tr);
   });
 }
 
-window.addEventListener("DOMContentLoaded", loadImages);
+window.onload = load;
