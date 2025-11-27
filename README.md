@@ -12,5 +12,6 @@ TODO:
 - deckbuilder for current tcg format
 - deckbuilder for genesys format
 - deckbuilder various other formats
+- optional: export decklists/missing cards (cardmarket)
 - optional: ydk support
 - optional: automatic database updates

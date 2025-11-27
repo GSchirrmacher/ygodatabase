@@ -10,14 +10,36 @@ interface Card {
 
 function App() {
   const [cards, setCards] = useState<Card[]>([]);
+  const [sets, setSets] = useState<string[]>([]);
+  const [selectedSet, setSelectedSet] = useState<string>("");
   
- useEffect(() => {
+  useEffect(() => {
+    invoke<string[]>("get_all_sets").then(setSets);
     invoke<Card[]>("load_cards_with_images").then(setCards);
   }, []);
+
+  const onSetChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const set = e.target.value;
+    setSelectedSet(set);
+
+    if(!set){
+      invoke<Card[]>("load_cards_with_images").then(setCards);
+    } else {
+      invoke<Card[]>("get_cards_by_set", { setName: set}).then(setCards);
+    }
+  };
 
   return (
     <div style={{ padding: 20 }}>
       <h1>YGO Cards</h1>
+
+      <label>Set auswählen:</label>
+      <select value={selectedSet} onChange={onSetChange}>
+        <option value="">Alle Sets / N/A</option>
+        {sets.map((s) => (
+          <option key={s} value={s}>{s}</option>
+        ))}
+      </select>
 
       <table border={1} cellPadding={5}>
         <thead>
