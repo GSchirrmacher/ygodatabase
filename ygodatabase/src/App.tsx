@@ -12,34 +12,81 @@ function App() {
   const [cards, setCards] = useState<Card[]>([]);
   const [sets, setSets] = useState<string[]>([]);
   const [selectedSet, setSelectedSet] = useState<string>("");
+  const [search, setSearch] = useState<string>("");
   
   useEffect(() => {
     invoke<string[]>("get_all_sets").then(setSets);
     invoke<Card[]>("load_cards_with_images").then(setCards);
   }, []);
 
-  const onSetChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const set = e.target.value;
-    setSelectedSet(set);
+  // 🔹 Set-Filter aktualisiert + keine Suche aktiv
+  useEffect(() => {
+    if (search.length >= 2) return; // Suche hat Vorrang
 
-    if(!set){
-      invoke<Card[]>("load_cards_with_images").then(setCards);
+    if (selectedSet === "ALL") {
+      invoke("get_first_cards").then((data: any) => setCards(data));
     } else {
-      invoke<Card[]>("get_cards_by_set", { setName: set}).then(setCards);
+      invoke("get_cards_by_set", { setName: selectedSet }).then((data: any) =>
+        setCards(data)
+      );
     }
-  };
+  }, [selectedSet, search]);
+
+  // 🔹 Live-Suche nach Name (mit Delay)
+  useEffect(() => {
+    if (search.length >= 2) {
+      const delay = setTimeout(() => {
+        invoke("search_cards_by_name", { query: search }).then((data: any) =>
+          setCards(data)
+        );
+      }, 400);
+      return () => clearTimeout(delay);
+    }
+
+    // Wenn Suchfeld gelöscht → zurück zu Set filter
+    if (search.length === 0) {
+      if (selectedSet === "ALL") {
+        invoke("get_first_cards").then((data: any) => setCards(data));
+      } else {
+        invoke("get_cards_by_set", { setName: selectedSet }).then((data: any) =>
+          setCards(data)
+        );
+      }
+    }
+  }, [search, selectedSet]);
 
   return (
     <div style={{ padding: 20 }}>
       <h1>YGO Cards</h1>
 
-      <label>Set auswählen:</label>
-      <select value={selectedSet} onChange={onSetChange}>
-        <option value="">Alle Sets / N/A</option>
-        {sets.map((s) => (
-          <option key={s} value={s}>{s}</option>
+      {/* SET FILTER */}
+      <select
+        value={selectedSet}
+        onChange={(e) => {
+          setSelectedSet(e.target.value);
+          setSearch("");
+        }}
+        style={{ padding: 6, marginRight: 12 }}
+      >
+        <option value="ALL">Alle Sets</option>
+        {sets.map((set, i) => (
+          <option key={i} value={set}>{set}</option>
         ))}
       </select>
+
+      {/* SUCHFELD */}
+      <input
+        type="text"
+        placeholder="Nach Name suchen…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={{
+          padding: 6,
+          width: 250,
+          marginBottom: 12,
+          border: "1px solid gray",
+        }}
+      />
 
       <table border={1} cellPadding={5}>
         <thead>
