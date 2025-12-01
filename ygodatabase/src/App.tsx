@@ -14,46 +14,45 @@ function App() {
   const [selectedSet, setSelectedSet] = useState<string>("");
   const [search, setSearch] = useState<string>("");
   
+  // Initial load: immer am Start einmal
   useEffect(() => {
-    invoke<string[]>("get_all_sets").then(setSets);
-    invoke<Card[]>("load_cards_with_images").then(setCards);
+    invoke("get_all_sets").then((data: any) =>
+      setSets(["ALL", ...data])
+    );
+
+    invoke("load_cards_with_images").then((data: any) => setCards(data));
   }, []);
 
-  // 🔹 Set-Filter aktualisiert + keine Suche aktiv
+  // Filtering logic (Set & Search)
   useEffect(() => {
-    if (search.length >= 2) return; // Suche hat Vorrang
-
-    if (selectedSet === "ALL") {
-      invoke("get_first_cards").then((data: any) => setCards(data));
-    } else {
-      invoke("get_cards_by_set", { setName: selectedSet }).then((data: any) =>
-        setCards(data)
-      );
-    }
-  }, [selectedSet, search]);
-
-  // 🔹 Live-Suche nach Name (mit Delay)
-  useEffect(() => {
+  // Falls ein aktiver Suchbegriff existiert → Suche
     if (search.length >= 2) {
       const delay = setTimeout(() => {
-        invoke("search_cards_by_name", { query: search }).then((data: any) =>
-          setCards(data)
-        );
-      }, 400);
-      return () => clearTimeout(delay);
-    }
-
-    // Wenn Suchfeld gelöscht → zurück zu Set filter
-    if (search.length === 0) {
-      if (selectedSet === "ALL") {
-        invoke("get_first_cards").then((data: any) => setCards(data));
+      if (selectedSet !== "ALL") {
+        invoke("search_cards_by_set_and_name", {
+          setName: selectedSet,
+          query: search,
+        }).then((data: any) => setCards(data));
       } else {
-        invoke("get_cards_by_set", { setName: selectedSet }).then((data: any) =>
-          setCards(data)
+        invoke("search_cards_by_name", { query: search }).then(
+          (data: any) => setCards(data)
         );
       }
+    }, 400);
+
+    return () => clearTimeout(delay);
+  }
+
+  // Falls die Suchleiste leer oder <2 Zeichen → nur Set Filter
+  if (selectedSet === "ALL") {
+    invoke("load_cards_with_images").then((data: any) => setCards(data));
+    } else {
+      invoke("get_cards_by_set", { setName: selectedSet }).then(
+        (data: any) => setCards(data)
+      );
     }
   }, [search, selectedSet]);
+
 
   return (
     <div style={{ padding: 20 }}>
