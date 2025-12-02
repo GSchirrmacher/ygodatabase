@@ -16,11 +16,11 @@ function App() {
   
   // Initial load: immer am Start einmal
   useEffect(() => {
-    invoke("get_all_sets").then((data: any) =>
-      setSets(["ALL", ...data])
-    );
+    // Sets laden
+    invoke<string[]>("get_all_sets").then(setSets);
 
-    invoke("load_cards_with_images").then((data: any) => setCards(data));
+    // Default: alle Karten laden
+    invoke<Card[]>("load_cards_with_images").then(setCards);
   }, []);
 
   // Filtering logic (Set & Search)
