@@ -1,58 +1,50 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/Core";
+import "./App.css";
 
-interface Card {
+type Card = {
   id: number;
   name: string;
   card_type: string;
-  img_base64?: string;
-}
+  image_path?: string | null;
+};
 
 function App() {
   const [cards, setCards] = useState<Card[]>([]);
   const [sets, setSets] = useState<string[]>([]);
-  const [selectedSet, setSelectedSet] = useState<string>("");
+  const [selectedSet, setSelectedSet] = useState<string>("ALL");
   const [search, setSearch] = useState<string>("");
-  
-  // Initial load: immer am Start einmal
-  useEffect(() => {
-    // Sets laden
-    invoke<string[]>("get_all_sets").then(setSets);
 
-    // Default: alle Karten laden
-    invoke<Card[]>("load_cards_with_images").then(setCards);
+  const loadSets = async () => {
+    try {
+      const result = await invoke<string[]>("get_all_sets");
+      setSets(result);
+    } catch (e) {
+      console.error("Fehler beim Laden der Sets:", e);
+    }
+  };
+
+  const loadCards = async () => {
+    try {
+      const data = await invoke<Card[]>("filter_cards", {
+        query: search.length >= 2 ? search : null,
+        set: selectedSet !== "ALL" ? selectedSet : null,
+      });
+      setCards(data);
+    } catch (e) {
+      console.error("Fehler beim Laden der Karten:", e);
+    }
+  };
+
+  useEffect(() => {
+    loadSets();
+    loadCards();
   }, []);
 
-  // Filtering logic (Set & Search)
   useEffect(() => {
-  // Falls ein aktiver Suchbegriff existiert → Suche
-    if (search.length >= 2) {
-      const delay = setTimeout(() => {
-      if (selectedSet !== "ALL") {
-        invoke("search_cards_by_set_and_name", {
-          setName: selectedSet,
-          query: search,
-        }).then((data: any) => setCards(data));
-      } else {
-        invoke("search_cards_by_name", { query: search }).then(
-          (data: any) => setCards(data)
-        );
-      }
-    }, 400);
-
-    return () => clearTimeout(delay);
-  }
-
-  // Falls die Suchleiste leer oder <2 Zeichen → nur Set Filter
-  if (selectedSet === "ALL") {
-    invoke("load_cards_with_images").then((data: any) => setCards(data));
-    } else {
-      invoke("get_cards_by_set", { setName: selectedSet }).then(
-        (data: any) => setCards(data)
-      );
-    }
+    const timeout = setTimeout(loadCards, 250);
+    return () => clearTimeout(timeout);
   }, [search, selectedSet]);
-
 
   return (
     <div style={{ padding: 20 }}>
@@ -90,8 +82,8 @@ function App() {
       <table border={1} cellPadding={5}>
         <thead>
           <tr>
-            <th>Name</th>
             <th>ID</th>
+            <th>Name</th>
             <th>Type</th>
             <th>Bild</th>
           </tr>
@@ -103,9 +95,9 @@ function App() {
               <td>{c.name}</td>
               <td>{c.card_type}</td>
               <td>
-                {c.img_base64 ? (
+                {c.image_path ? (
                   <img
-                    src={`data:image/jpeg;base64,${c.img_base64}`}
+                    src={`data:image/jpeg;base64,${c.image_path}`}
                     width={80}
                   />
                 ) : (
