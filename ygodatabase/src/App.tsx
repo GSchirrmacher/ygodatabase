@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/Core";
 import "./App.css";
 
-type Card = {
+interface Card {
   id: number;
   name: string;
   card_type: string;
@@ -11,103 +11,128 @@ type Card = {
 
 function App() {
   const [cards, setCards] = useState<Card[]>([]);
-  const [sets, setSets] = useState<string[]>([]);
-  const [selectedSet, setSelectedSet] = useState<string>("ALL");
-  const [search, setSearch] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const loadSets = async () => {
-    try {
-      const result = await invoke<string[]>("get_all_sets");
-      setSets(result);
-    } catch (e) {
-      console.error("Fehler beim Laden der Sets:", e);
-    }
-  };
+  // Filter states
+  const [searchName, setSearchName] = useState("");
+  const [searchSet, setSearchSet] = useState("");
+  const [searchType, setSearchType] = useState("");
 
+  // Karten laden, kombiniert nach allen Filtern
   const loadCards = async () => {
+    setLoading(true);
+    setError(null);
+
     try {
-      const data = await invoke<Card[]>("filter_cards", {
-        query: search.length >= 2 ? search : null,
-        set: selectedSet !== "ALL" ? selectedSet : null,
+      const result: Card[] = await invoke("filter_cards", {
+        name: searchName.trim() !== "" ? searchName : null,
+        setName: searchSet.trim() !== "" ? searchSet : null,
+        cardType: searchType.trim() !== "" ? searchType : null,
       });
-      setCards(data);
-    } catch (e) {
-      console.error("Fehler beim Laden der Karten:", e);
+
+      setCards(result);
+    } catch (e: any) {
+      setError("Fehler beim Laden der Karten: " + e);
     }
+
+    setLoading(false);
   };
 
+  // Initial laden (alle Karten)
   useEffect(() => {
-    loadSets();
     loadCards();
   }, []);
 
-  useEffect(() => {
-    const timeout = setTimeout(loadCards, 250);
-    return () => clearTimeout(timeout);
-  }, [search, selectedSet]);
+  // Filter anwenden, wenn Enter gedrückt wird
+  const onEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") loadCards();
+  };
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>YGO Cards</h1>
+      <h1>YGO Card Viewer</h1>
 
-      {/* SET FILTER */}
-      <select
-        value={selectedSet}
-        onChange={(e) => {
-          setSelectedSet(e.target.value);
-          setSearch("");
-        }}
-        style={{ padding: 6, marginRight: 12 }}
-      >
-        <option value="ALL">Alle Sets</option>
-        {sets.map((set, i) => (
-          <option key={i} value={set}>{set}</option>
-        ))}
-      </select>
+      {/* Filter-Bereich */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
+        <input
+          type="text"
+          placeholder="Nach Name suchen..."
+          value={searchName}
+          onChange={(e) => setSearchName(e.target.value)}
+          onKeyDown={onEnter}
+        />
 
-      {/* SUCHFELD */}
-      <input
-        type="text"
-        placeholder="Nach Name suchen…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{
-          padding: 6,
-          width: 250,
-          marginBottom: 12,
-          border: "1px solid gray",
-        }}
-      />
+        <input
+          type="text"
+          placeholder="Set..."
+          value={searchSet}
+          onChange={(e) => setSearchSet(e.target.value)}
+          onKeyDown={onEnter}
+        />
 
-      <table border={1} cellPadding={5}>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Bild</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cards.map((c) => (
-            <tr key={c.id}>
-              <td>{c.id}</td>
-              <td>{c.name}</td>
-              <td>{c.card_type}</td>
-              <td>
-                {c.image_path ? (
-                  <img
-                    src={`data:image/jpeg;base64,${c.image_path}`}
-                    width={80}
-                  />
-                ) : (
-                  "Kein Bild"
-                )}
-              </td>
+        <input
+          type="text"
+          placeholder="Kartentyp..."
+          value={searchType}
+          onChange={(e) => setSearchType(e.target.value)}
+          onKeyDown={onEnter}
+        />
+
+        <button onClick={loadCards}>Filter anwenden</button>
+        <button
+          onClick={() => {
+            setSearchName("");
+            setSearchSet("");
+            setSearchType("");
+            loadCards();
+          }}
+        >
+          Reset
+        </button>
+      </div>
+
+      {/* Ladeanzeige */}
+      {loading && <p>Lade Karten...</p>}
+
+      {/* Fehleranzeige */}
+      {error && <p style={{ color: "red" }}>{error}</p>}
+
+      {/* Wenn keine Ergebnisse */}
+      {!loading && cards.length === 0 && <p>Keine Karten gefunden.</p>}
+
+      {/* Kartenanzeige */}
+      {!loading && cards.length > 0 && (
+        <table border={1} cellPadding={8}>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Typ</th>
+              <th>Bild</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {cards.map((c) => (
+              <tr key={c.id}>
+                <td>{c.id}</td>
+                <td>{c.name}</td>
+                <td>{c.card_type}</td>
+                <td>
+                  {c.image_path ? (
+                    <img
+                      src={`data:image/jpeg;base64,${c.image_path}`}
+                      width={80}
+                    />
+                  ) : (
+                    "Kein Bild"
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

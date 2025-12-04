@@ -2,6 +2,7 @@ use rusqlite::{Connection, ToSql};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
+use base64::prelude::*;
 
 static DB_PATH: &'static str = "E:/ygodatabase/cards.db";
 
@@ -23,7 +24,7 @@ fn filter_cards(
     let conn = Connection::open(DB_PATH)
         .map_err(|e| format!("DB Fehler: {}", e))?;
 
-    let mut sql = String::from(
+    let mut stmt = String::from(
         "SELECT DISTINCT c.id, c.name, c.type, ci.local_path
          FROM cards c
          LEFT JOIN card_images ci ON c.id = ci.card_id
@@ -35,45 +36,59 @@ fn filter_cards(
 
     if let Some(q) = query {
         if q.len() >= 2 {
-            sql.push_str(" AND c.name LIKE ?");
+            stmt.push_str(" AND c.name LIKE ?");
             params.push(Box::new(format!("%{}%", q)));
         }
     }
 
     if let Some(s) = set {
         if !s.is_empty() {
-            sql.push_str(" AND cs.set_name = ?");
+            stmt.push_str(" AND cs.set_name = ?");
             params.push(Box::new(s));
         }
     }
 
     if let Some(t) = card_type {
         if !t.is_empty() {
-            sql.push_str(" AND c.type = ?");
+            stmt.push_str(" AND c.type = ?");
             params.push(Box::new(t));
         }
     }
 
     if let Some(a) = attribute {
         if !a.is_empty() {
-            sql.push_str(" AND c.attribute = ?");
+            stmt.push_str(" AND c.attribute = ?");
             params.push(Box::new(a));
         }
     }
 
-    sql.push_str(" ORDER BY c.name LIMIT 50");
+    stmt.push_str(" ORDER BY c.name LIMIT 50");
 
-    let mut stmt = conn.prepare(&sql)
+    let mut stmt = conn.prepare(&stmt)
         .map_err(|e| format!("SQL Prepare Fehler: {}", e))?;
 
     let rows = stmt
-        .query_map(rusqlite::params_from_iter(params.iter()), |row| {
-            let image_path: Option<String> = row.get(3).ok();
+        .query_map([], |row| {
+            let id: i64 = row.get(0)?;
+            let name: String = row.get(1)?;
+            let card_type: String = row.get(2)?;
+            let path: Option<String> = row.get(3)?;
+
+            let img_b64 = path.as_ref().and_then(|p| {
+                let fixed = p.replace("\\", "/");
+                let full_path = format!("E:/ygodatabase/{}", fixed);
+
+                match fs::read(&full_path) {
+                    Ok(bytes) => Some(BASE64_STANDARD.encode(bytes)),
+                    Err(_) => None,
+                }
+            });
+
             Ok(Card {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                card_type: row.get(2)?,
-                image_path: image_path.map(|p| p.replace("\\", "/")),
+                id,
+                name,
+                card_type,
+                image_path: img_b64,
             })
         })
         .map_err(|e| format!("Query Fehler: {}", e))?;
