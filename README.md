@@ -7,7 +7,7 @@ Done:
 - show card informations
 
 TODO:
-- tree structure for deckbuilder/formats and collection manager
+- menus
 - collection manager
 - deckbuilder for current tcg format
 - deckbuilder for genesys format
