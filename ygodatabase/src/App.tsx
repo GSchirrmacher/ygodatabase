@@ -9,88 +9,63 @@ interface Card {
   img_base64?: string;
 }
 
-function App() {
+export default function App() {
   const [cards, setCards] = useState<Card[]>([]);
   const [sets, setSets] = useState<string[]>([]);
-  const [selectedSet, setSelectedSet] = useState<string>("");
+  const [selectedSet, setSelectedSet] = useState<string>("ALL");
   const [search, setSearch] = useState<string>("");
-  
+
+  // Load sets + initial cards
   useEffect(() => {
     invoke<string[]>("get_all_sets").then(setSets);
     invoke<Card[]>("load_cards_with_images").then(setCards);
   }, []);
 
+  // Auto-refresh when filters change
   useEffect(() => {
-    if (search.length >= 2) return;
+    const params: any = {};
 
-    if (selectedSet === "ALL") {
-      invoke("get_first_cards").then((data: any) => setCards(data));
-    } else {
-      invoke("get_cards_by_set", { setName: selectedSet }).then((data: any) =>
-        setCards(data)
-      );
+    if (search.trim().length > 0) {
+      params.name = search;
     }
-  }, [selectedSet, search]);
-
-  useEffect(() => {
-    if (search.length >= 2) {
-      const delay = setTimeout(() => {
-        invoke("search_cards_by_name", { query: search }).then((data: any) =>
-          setCards(data)
-        );
-      }, 400);
-      return () => clearTimeout(delay);
+    if (selectedSet !== "ALL") {
+      params.set = selectedSet;
     }
 
-    if (search.length === 0) {
-      if (selectedSet === "ALL") {
-        invoke("get_first_cards").then((data: any) => setCards(data));
-      } else {
-        invoke("get_cards_by_set", { setName: selectedSet }).then((data: any) =>
-          setCards(data)
-        );
-      }
-    }
+    invoke<Card[]>("load_cards_with_images", params).then(setCards);
   }, [search, selectedSet]);
 
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ padding: 24 }}>
       <h1>YGO Cards</h1>
 
-      {/* SET FILTER */}
-      <select
-        value={selectedSet}
-        onChange={(e) => {
-          setSelectedSet(e.target.value);
-          setSearch("");
-        }}
-        style={{ padding: 6, marginRight: 12 }}
-      >
-        <option value="ALL">Alle Sets</option>
-        {sets.map((set, i) => (
-          <option key={i} value={set}>{set}</option>
-        ))}
-      </select>
+      {/* Filters */}
+      <div style={{ marginBottom: 20 }}>
+        <select
+          value={selectedSet}
+          onChange={(e) => setSelectedSet(e.target.value)}
+        >
+          <option value="ALL">All Sets</option>
+          {sets.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
 
-      {/* SUCHFELD */}
-      <input
-        type="text"
-        placeholder="Nach Name suchen…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{
-          padding: 6,
-          width: 250,
-          marginBottom: 12,
-          border: "1px solid gray",
-        }}
-      />
+        <input
+          style={{ marginLeft: 10 }}
+          type="text"
+          placeholder="Search name..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
 
+      {/* Table */}
       <table border={1} cellPadding={5}>
         <thead>
           <tr>
-            <th>Name</th>
             <th>ID</th>
+            <th>Name</th>
             <th>Type</th>
             <th>Bild</th>
           </tr>
@@ -103,10 +78,7 @@ function App() {
               <td>{c.card_type}</td>
               <td>
                 {c.img_base64 ? (
-                  <img
-                    src={`data:image/jpeg;base64,${c.img_base64}`}
-                    width={80}
-                  />
+                  <img src={`data:image/jpeg;base64,${c.img_base64}`} width={80} />
                 ) : (
                   "Kein Bild"
                 )}
@@ -118,5 +90,3 @@ function App() {
     </div>
   );
 }
-
-export default App;
