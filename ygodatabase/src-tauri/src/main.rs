@@ -12,11 +12,7 @@ struct Card {
     name: String,
     card_type: String,
     img_base64: Option<String>,
-}
-
-#[derive(Serialize)]
-struct Set {
-    set_name: String,
+    set_rarity: String,
 }
 
 #[tauri::command]
@@ -25,7 +21,7 @@ fn load_cards_with_images(name: Option<String>, card_type: Option<String>, set: 
     let conn = Connection::open(DB_PATH).map_err(|e| e.to_string())?;
 
     let mut stmt = String::from(
-        "SELECT DISTINCT c.id, c.name, c.type, ci.local_path
+        "SELECT DISTINCT c.id, c.name, c.type, ci.local_path, cs.set_rarity
          FROM cards c
          LEFT JOIN card_images ci ON c.id = ci.card_id
          LEFT JOIN card_sets cs ON c.id = cs.card_id
@@ -62,6 +58,7 @@ fn load_cards_with_images(name: Option<String>, card_type: Option<String>, set: 
             let name: String = row.get(1)?;
             let card_type: String = row.get(2)?;
             let path: Option<String> = row.get(3)?;
+            let set_rarity: String = row.get(4)?;
 
             let img_b64 = path.as_ref().and_then(|p| {
                 let fixed = p.replace("\\", "/");
@@ -78,6 +75,7 @@ fn load_cards_with_images(name: Option<String>, card_type: Option<String>, set: 
                 name,
                 card_type,
                 img_base64: img_b64,
+                set_rarity,
             })
         })
         .map_err(|e| e.to_string())?;

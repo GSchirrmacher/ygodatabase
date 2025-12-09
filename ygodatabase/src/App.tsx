@@ -7,6 +7,7 @@ interface Card {
   name: string;
   card_type: string;
   img_base64?: string;
+  set_rarity: string;
 }
 
 export default function App() {
@@ -68,6 +69,7 @@ export default function App() {
             <th>Name</th>
             <th>Type</th>
             <th>Bild</th>
+            <th>Rarity</th>
           </tr>
         </thead>
         <tbody>
@@ -83,6 +85,7 @@ export default function App() {
                   "Kein Bild"
                 )}
               </td>
+              <td>{c.set_rarity}</td>
             </tr>
           ))}
         </tbody>
