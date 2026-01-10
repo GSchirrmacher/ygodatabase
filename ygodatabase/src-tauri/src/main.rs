@@ -62,7 +62,7 @@ fn load_cards_with_images(name: Option<String>, card_type: Option<String>, set: 
 
             let img_b64 = path.as_ref().and_then(|p| {
                 let fixed = p.replace("\\", "/");
-                let full_path = format!("E:/ygodatabase/{}", fixed);
+                let full_path = format!("../ygodatabase/{}", fixed);
 
                 match fs::read(&full_path) {
                     Ok(bytes) => Some(BASE64_STANDARD.encode(bytes)),

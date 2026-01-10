@@ -1,9 +1,8 @@
 Deckbuilder/Card collection manager for Yu-Gi-Oh! Tcg and various formats.
 
-!Heavy WIP!
 Done:
 - Database entries (from ygoprodeck API)
-- showing images
+- showing images -> bugged again
 - show card informations
 
 TODO:
