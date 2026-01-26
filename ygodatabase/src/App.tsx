@@ -7,7 +7,7 @@ interface Card {
   name: string;
   card_type: string;
   img_base64?: string;
-  set_rarity: string;
+  set_rarity?: string;
 }
 
 export default function App() {
@@ -74,7 +74,7 @@ export default function App() {
         </thead>
         <tbody>
           {cards.map((c) => (
-            <tr key={c.id}>
+            <tr key={`${c.id}-${c.set_rarity ?? "none"}`}>
               <td>{c.id}</td>
               <td>{c.name}</td>
               <td>{c.card_type}</td>
