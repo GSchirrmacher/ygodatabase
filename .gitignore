@@ -1,5 +1,5 @@
-img/
-img_cropped/
+src-tauri/src/img/
+src-tauri/src/img_cropped/
 target/
 Deckbuilder Draft.png
 card_image_dummy.png
