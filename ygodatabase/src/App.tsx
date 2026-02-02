@@ -7,7 +7,8 @@ interface Card {
   name: string;
   card_type: string;
   img_base64?: string;
-  set_rarity?: string;
+  sets?: string[];        // grouped mode
+  set_rarity?: string;    // flat mode
 }
 
 export default function App() {
@@ -68,24 +69,28 @@ export default function App() {
             <th>ID</th>
             <th>Name</th>
             <th>Type</th>
-            <th>Bild</th>
-            <th>Rarity</th>
+            <th>Image</th>
+            {selectedSet === "ALL" && <th>Sets</th>}
+            {selectedSet !== "ALL" && <th>Rarity</th>}
           </tr>
         </thead>
         <tbody>
           {cards.map((c) => (
-            <tr key={`${c.id}-${c.set_rarity ?? "none"}`}>
+            <tr key={`${c.id}-${c.set_rarity ?? "grouped"}`}>
               <td>{c.id}</td>
               <td>{c.name}</td>
               <td>{c.card_type}</td>
               <td>
-                {c.img_base64 ? (
-                  <img src={`data:image/jpeg;base64,${c.img_base64}`} width={80} />
-                ) : (
-                  "Kein Bild"
-                )}
+                {c.img_base64 ? <img src={`data:image/jpeg;base64,${c.img_base64}`} width={80}/> : "Kein Bild"}
               </td>
-              <td>{c.set_rarity}</td>
+
+              {selectedSet === "ALL" && (
+                <td>{c.sets?.join(", ") ?? "-"}</td>
+              )}
+
+              {selectedSet !== "ALL" && (
+                <td>{c.set_rarity ?? "-"}</td>
+              )}
             </tr>
           ))}
         </tbody>
