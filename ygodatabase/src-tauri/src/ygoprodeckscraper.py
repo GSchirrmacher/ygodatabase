@@ -72,11 +72,12 @@ cursor.execute("""
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS card_sets (
     card_id INTEGER,
-    set_name TEXT,
     set_code TEXT,
+    set_name TEXT,
     set_rarity TEXT,
     set_price TEXT,
-    collection_amount INTEGER
+    collection_amount INTEGER,
+    UNIQUE(card_id, set_code, set_rarity)
 )
 """)
 

@@ -6,8 +6,6 @@ use std::fs;
 use std::path::PathBuf;
 use rusqlite::named_params;
 
-// TODO : Same Rarity + Same ID = Bug
-// TODO : Features
 fn get_project_root() -> PathBuf {
     let mut exe = std::env::current_exe().expect("Failed to get exe path");
 
@@ -85,6 +83,7 @@ fn load_cards_with_images(
             c.type, 
             ci.local_path, 
             ci.image_id,
+            c.set_code
             cs.set_name, 
             cs.set_rarity
         FROM cards c
@@ -112,7 +111,7 @@ fn load_cards_with_images(
             name: row.get(1)?,
             card_type: row.get(2)?,
             img_path: row.get(3)?,
-            image_id: row.get(4).ok(),     // NEW
+            image_id: row.get(4).ok(),
             set_name: row.get(5).ok(),
             set_rarity: row.get(6).ok(),
         })
