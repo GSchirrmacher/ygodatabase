@@ -6,5 +6,5 @@
 # will have schema files for capabilities auto-completion
 /gen/schemas
 
-/src/img
-/src/img_cropped
+/ressources/img
+/ressources/img_cropped

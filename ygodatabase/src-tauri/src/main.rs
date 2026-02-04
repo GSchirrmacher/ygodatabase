@@ -6,7 +6,8 @@ use std::fs;
 use std::path::PathBuf;
 use rusqlite::named_params;
 
-
+// TODO : Same Rarity + Same ID = Bug
+// TODO : Features
 fn get_project_root() -> PathBuf {
     let mut exe = std::env::current_exe().expect("Failed to get exe path");
 
@@ -19,7 +20,7 @@ fn get_project_root() -> PathBuf {
 
 fn get_db_path() -> PathBuf {
     let mut root = get_project_root();
-    root.push("src");
+    root.push("ressources");
     root.push("cards.db");
     root
 }
@@ -30,8 +31,10 @@ struct Card {
     name: String,
     card_type: String,
     img_base64: Option<String>,
-    sets: Option<Vec<String>>,     // grouped mode
-    set_rarity: Option<String>,    // set-filtered mode
+    image_id: Option<i64>,
+    is_alt_art: bool,
+    sets: Option<Vec<String>>,
+    set_rarity: Option<String>,
 }
 
 #[derive(Debug)]
@@ -40,6 +43,7 @@ struct RawRow {
     name: String,
     card_type: String,
     img_path: Option<String>,
+    image_id: Option<i64>,
     set_name: Option<String>,
     set_rarity: Option<String>,
 }
@@ -49,13 +53,20 @@ fn load_image_base64(path: &Option<String>) -> Option<String> {
         let fixed = p.replace("\\", "/");
 
         let mut full_path = get_project_root();
-        full_path.push("src");
+        full_path.push("ressources");
         full_path.push(fixed);   // e.g. img/12345.jpg
 
         fs::read(full_path)
             .ok()
             .map(|bytes| BASE64_STANDARD.encode(bytes))
     })
+}
+
+fn is_alt_art(card_id: i64, image_id: Option<i64>) -> bool {
+    match image_id {
+        Some(img_id) => img_id != card_id,
+        None => false,
+    }
 }
 
 #[tauri::command]
@@ -68,15 +79,23 @@ fn load_cards_with_images(
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
 
     let sql = "
-        SELECT c.id, c.name, c.type, ci.local_path, cs.set_name, cs.set_rarity
+        SELECT 
+            c.id, 
+            c.name, 
+            c.type, 
+            ci.local_path, 
+            ci.image_id,
+            cs.set_name, 
+            cs.set_rarity
         FROM cards c
         LEFT JOIN card_images ci ON c.id = ci.card_id
         LEFT JOIN card_sets cs ON c.id = cs.card_id
         WHERE (:name IS NULL OR c.name LIKE :name)
-          AND (:card_type IS NULL OR c.type = :card_type)
-          AND (:set IS NULL OR cs.set_name = :set)
+        AND (:card_type IS NULL OR c.type = :card_type)
+        AND (:set IS NULL OR cs.set_name = :set)
         LIMIT 50
     ";
+
 
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
 
@@ -87,17 +106,19 @@ fn load_cards_with_images(
     };
 
     let rows = stmt
-        .query_map(params, |row| {
-            Ok(RawRow {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                card_type: row.get(2)?,
-                img_path: row.get(3)?,
-                set_name: row.get(4).ok(),     // nullable
-                set_rarity: row.get(5).ok(),   // nullable
-            })
+    .query_map(params, |row| {
+        Ok(RawRow {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            card_type: row.get(2)?,
+            img_path: row.get(3)?,
+            image_id: row.get(4).ok(),     // NEW
+            set_name: row.get(5).ok(),
+            set_rarity: row.get(6).ok(),
         })
-        .map_err(|e| e.to_string())?;
+    })
+    .map_err(|e| e.to_string())?;
+
 
     let mut raw_rows = Vec::new();
     for r in rows {
@@ -116,6 +137,8 @@ fn load_cards_with_images(
                 name: r.name.clone(),
                 card_type: r.card_type.clone(),
                 img_base64: load_image_base64(&r.img_path),
+                image_id: r.image_id,
+                is_alt_art: is_alt_art(r.id, r.image_id),
                 sets: Some(Vec::new()),
                 set_rarity: None,
             });
@@ -133,16 +156,19 @@ fn load_cards_with_images(
     } else {
         // SET FILTER MODE (flat list)
         let cards = raw_rows
-            .into_iter()
-            .map(|r| Card {
-                id: r.id,
-                name: r.name,
-                card_type: r.card_type,
-                img_base64: load_image_base64(&r.img_path),
-                sets: None,
-                set_rarity: r.set_rarity,
-            })
-            .collect();
+        .into_iter()
+        .map(|r| Card {
+            id: r.id,
+            name: r.name,
+            card_type: r.card_type,
+            img_base64: load_image_base64(&r.img_path),
+            image_id: r.image_id,
+            is_alt_art: is_alt_art(r.id, r.image_id),
+            sets: None,
+            set_rarity: r.set_rarity,
+        })
+        .collect();
+
 
         Ok(cards)
     }

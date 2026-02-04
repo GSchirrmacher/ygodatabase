@@ -7,9 +7,12 @@ interface Card {
   name: string;
   card_type: string;
   img_base64?: string;
-  sets?: string[];        // grouped mode
-  set_rarity?: string;    // flat mode
+  image_id?: number;
+  is_alt_art: boolean;
+  set_rarity?: string;
+  sets?: string[];
 }
+
 
 export default function App() {
   const [cards, setCards] = useState<Card[]>([]);
@@ -76,7 +79,7 @@ export default function App() {
         </thead>
         <tbody>
           {cards.map((c) => (
-            <tr key={`${c.id}-${c.set_rarity ?? "grouped"}`}>
+            <tr key={`${c.id}-${c.set_rarity ?? "none"}-${c.image_id ?? "base"}`}>
               <td>{c.id}</td>
               <td>{c.name}</td>
               <td>{c.card_type}</td>

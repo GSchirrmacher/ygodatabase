@@ -5,12 +5,19 @@ import os
 import json
 
 API_URL = "http://db.ygoprodeck.com/api/v7/cardinfo.php?misc=yes&format=genesys"
-IMAGES_DIR = "img"
-IMAGES_CROPPED_DIR = "img_cropped"
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+DB_PATH = os.path.join(BASE_DIR, "..", "ressources", "cards.db")
+DB_DIR = os.path.dirname(DB_PATH)
+
+IMAGES_DIR = os.path.join(DB_DIR, "img")
+IMAGES_CROPPED_DIR = os.path.join(DB_DIR, "img_cropped")
 
 os.makedirs(IMAGES_DIR, exist_ok=True)
 os.makedirs(IMAGES_CROPPED_DIR, exist_ok=True)
-conn = sqlite3.connect(r"E:\ygodatabase\cards.db") # <- change to desired output location
+
+conn = sqlite3.connect(DB_PATH)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -60,6 +67,9 @@ CREATE TABLE IF NOT EXISTS card_images_cropped (
 """)
 
 cursor.execute("""
+    DROP TABLE IF EXISTS card_sets
+""")
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS card_sets (
     card_id INTEGER,
     set_name TEXT,
@@ -70,6 +80,9 @@ CREATE TABLE IF NOT EXISTS card_sets (
 )
 """)
 
+cursor.execute("""
+    DROP TABLE IF EXISTS card_prices
+""")
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS card_prices (
     card_id INTEGER,
@@ -304,6 +317,10 @@ for i, card in enumerate(cards, start=1):
         cursor.execute("""
             INSERT INTO card_sets (card_id, set_name, set_code, set_rarity, set_price, collection_amount)
             VALUES(?, ?, ?, ?, ?, 0)
+            ON CONFLICT(card_id, set_code, set_rarity)
+            DO UPDATE SET
+                set_name = excluded.set_name,
+                set_price = excluded.set_price
         """, (
             card_id, 
             s.get("set_name"), 
