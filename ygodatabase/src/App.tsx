@@ -6,9 +6,10 @@ interface Card {
   id: number;
   name: string;
   card_type: string;
+  set_code: string;
+  has_alt_art: number;
   img_base64?: string;
   image_id?: number;
-  is_alt_art: boolean;
   set_rarity?: string;
   sets?: string[];
 }
@@ -29,14 +30,8 @@ export default function App() {
   // Auto-refresh when filters change
   useEffect(() => {
     const params: any = {};
-
-    if (search.trim().length > 0) {
-      params.name = search;
-    }
-    if (selectedSet !== "ALL") {
-      params.set = selectedSet;
-    }
-
+    if (search.trim().length > 0) params.name = search;
+    if (selectedSet !== "ALL") params.set = selectedSet;
     invoke<Card[]>("load_cards_with_images", params).then(setCards);
   }, [search, selectedSet]);
 
@@ -79,21 +74,15 @@ export default function App() {
         </thead>
         <tbody>
           {cards.map((c) => (
-            <tr key={`${c.id}-${c.set_rarity ?? "none"}-${c.image_id ?? "base"}`}>
+            <tr key={`${c.id}-${c.set_rarity ?? "none"}-${c.image_id ?? "base"}-${c.set_code ?? "none"}`}>
               <td>{c.id}</td>
               <td>{c.name}</td>
               <td>{c.card_type}</td>
               <td>
                 {c.img_base64 ? <img src={`data:image/jpeg;base64,${c.img_base64}`} width={80}/> : "Kein Bild"}
               </td>
-
-              {selectedSet === "ALL" && (
-                <td>{c.sets?.join(", ") ?? "-"}</td>
-              )}
-
-              {selectedSet !== "ALL" && (
-                <td>{c.set_rarity ?? "-"}</td>
-              )}
+              {selectedSet === "ALL" && <td>{c.sets?.join(", ") ?? "-"}</td>}
+              {selectedSet !== "ALL" && <td>{c.set_rarity ?? "-"}</td>}
             </tr>
           ))}
         </tbody>

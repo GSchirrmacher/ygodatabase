@@ -1,8 +1,8 @@
 use base64::prelude::*;
 use rusqlite::{Connection};
 use serde::Serialize;
-use std::collections::HashMap;
 use std::fs;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use rusqlite::named_params;
 
@@ -26,14 +26,16 @@ fn get_db_path() -> PathBuf {
     root
 }
 
+
 #[derive(Serialize)]
 struct Card {
     id: i64,
     name: String,
     card_type: String,
+    set_code: Option<String>,
+    has_alt_art: i64,
     img_base64: Option<String>,
     image_id: Option<i64>,
-    is_alt_art: bool,
     sets: Option<Vec<String>>,
     set_rarity: Option<String>,
 }
@@ -43,6 +45,8 @@ struct RawRow {
     id: i64,
     name: String,
     card_type: String,
+    set_code: Option<String>,
+    has_alt_art: i64,
     img_path: Option<String>,
     image_id: Option<i64>,
     set_name: Option<String>,
@@ -63,12 +67,6 @@ fn load_image_base64(path: &Option<String>) -> Option<String> {
     })
 }
 
-fn is_alt_art(card_id: i64, image_id: Option<i64>) -> bool {
-    match image_id {
-        Some(img_id) => img_id != card_id,
-        None => false,
-    }
-}
 
 #[tauri::command]
 fn load_cards_with_images(
@@ -84,6 +82,7 @@ fn load_cards_with_images(
             c.id, 
             c.name, 
             c.type, 
+            c.has_alt_art,
             ci.image_id,
             ci.local_path, 
             cs.set_code,
@@ -113,6 +112,8 @@ fn load_cards_with_images(
             id: row.get("id")?,
             name: row.get("name")?,
             card_type: row.get("type")?,
+            set_code: row.get("set_code")?,
+            has_alt_art: row.get("has_alt_art")?,
             image_id: row.get("image_id")?,
             img_path: row.get("local_path")?,
             set_name: row.get("set_name").ok(),
@@ -138,9 +139,10 @@ fn load_cards_with_images(
                 id: r.id,
                 name: r.name.clone(),
                 card_type: r.card_type.clone(),
+                set_code: r.set_code.clone(),
+                has_alt_art: r.has_alt_art.clone(),
                 img_base64: load_image_base64(&r.img_path),
                 image_id: r.image_id,
-                is_alt_art: is_alt_art(r.id, r.image_id),
                 sets: Some(Vec::new()),
                 set_rarity: None,
             });
@@ -163,15 +165,14 @@ fn load_cards_with_images(
             id: r.id,
             name: r.name,
             card_type: r.card_type,
+            set_code: r.set_code,
+            has_alt_art: r.has_alt_art,
             img_base64: load_image_base64(&r.img_path),
             image_id: r.image_id,
-            is_alt_art: is_alt_art(r.id, r.image_id),
             sets: None,
             set_rarity: r.set_rarity,
         })
         .collect();
-
-
         Ok(cards)
     }
 }
