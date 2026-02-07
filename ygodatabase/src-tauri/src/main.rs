@@ -6,6 +6,9 @@ use std::fs;
 use std::path::PathBuf;
 use rusqlite::named_params;
 
+// TODO : set_code anstatt image_id als identifier?
+// TODO : scraper updaten, dass mehrere Karten mit alt arts vorhanden sein können
+
 fn get_project_root() -> PathBuf {
     let mut exe = std::env::current_exe().expect("Failed to get exe path");
 
@@ -81,9 +84,9 @@ fn load_cards_with_images(
             c.id, 
             c.name, 
             c.type, 
-            ci.local_path, 
             ci.image_id,
-            c.set_code
+            ci.local_path, 
+            cs.set_code,
             cs.set_name, 
             cs.set_rarity
         FROM cards c
@@ -107,13 +110,13 @@ fn load_cards_with_images(
     let rows = stmt
     .query_map(params, |row| {
         Ok(RawRow {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            card_type: row.get(2)?,
-            img_path: row.get(3)?,
-            image_id: row.get(4).ok(),
-            set_name: row.get(5).ok(),
-            set_rarity: row.get(6).ok(),
+            id: row.get("id")?,
+            name: row.get("name")?,
+            card_type: row.get("type")?,
+            image_id: row.get("image_id")?,
+            img_path: row.get("local_path")?,
+            set_name: row.get("set_name").ok(),
+            set_rarity: row.get("set_rarity").ok(),
         })
     })
     .map_err(|e| e.to_string())?;

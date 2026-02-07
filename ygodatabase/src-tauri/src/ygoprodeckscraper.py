@@ -97,6 +97,33 @@ CREATE TABLE IF NOT EXISTS card_prices (
 
 conn.commit()
 
+def migrate_add_has_alt_art_column():
+    try:
+        cursor.execute("ALTER TABLE cards ADD COLUMN has_alt_art INTEGER DEFAULT 0;")
+        conn.commit()
+        print("Column has_alt_art added.")
+    except sqlite3.OperationalError:
+        print("Column has_alt_art already exists.")
+
+def migrate_set_has_alt_art():
+    cursor.execute("""
+        SELECT card_id, COUNT(*) 
+        FROM card_images 
+        GROUP BY card_id
+    """)
+    rows = cursor.fetchall()
+
+    for card_id, image_count in rows:
+        has_alt = 1 if image_count > 1 else 0
+        cursor.execute("""
+            UPDATE cards
+            SET has_alt_art = ?
+            WHERE id = ?
+        """, (has_alt, card_id))
+
+    conn.commit()
+
+
 def card_exists(card_id):
     cursor.execute("""
         SELECT 1 FROM cards 
@@ -163,7 +190,7 @@ def fetch_cards():
         raise SystemExit(f"Error with API call: {r.status_code}")
     data = r.json()
     return data.get("data", [])
-    
+
 cards = fetch_cards()
 print(f"{len(cards)} cards found.\n")
 
@@ -174,13 +201,16 @@ for i, card in enumerate(cards, start=1):
         misc = card.get("misc_info", [])
 
     misc = card.get("misc_info") or card.get("misc") or []
-
+    migrate_add_has_alt_art_column()
+    migrate_set_has_alt_art()
     m0 = {}
     genesys_points = None
     ocg_date = None
     tcg_date = None
     formats = None
-    
+    card_images = card.get("card_images", [])
+    has_alt_art = 1 if len(card_images) > 1 else 0
+
     
     if misc and isinstance(misc, list):
         m0 = misc[0]
@@ -199,9 +229,9 @@ for i, card in enumerate(cards, start=1):
                 atk, def, level, scale, linkval, linkmarkers,
                 race, attribute, archetype, banlist_info,
                 formats, ocg_date, tcg_date, genesys_points,
-                md_rarity, has_effect, treated_as
+                md_rarity, has_effect, treated_as, has_alt_art
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             card_id,
             card.get("name"),
@@ -225,7 +255,8 @@ for i, card in enumerate(cards, start=1):
             genesys_points,
             md_rarity, 
             has_effect, 
-            treated_as
+            treated_as,
+            has_alt_art
         ))
 
     else:
@@ -253,7 +284,8 @@ for i, card in enumerate(cards, start=1):
                 genesys_points = ?,
                 md_rarity = ?, 
                 has_effect = ?, 
-                treated_as = ?
+                treated_as = ?,
+                has_alt_art = ?
             WHERE id = ?
         """, (
             card.get("name"),
@@ -278,7 +310,8 @@ for i, card in enumerate(cards, start=1):
             card_id,
             md_rarity, 
             has_effect, 
-            treated_as
+            treated_as,
+            has_alt_art
         ))
 
     conn.commit()
