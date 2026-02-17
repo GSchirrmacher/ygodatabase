@@ -20,7 +20,7 @@
     "security": {
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": ["$RESOURCE/*", "$APP/*", "$CWD/*"]
       }
     }
   },

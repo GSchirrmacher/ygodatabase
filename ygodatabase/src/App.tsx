@@ -8,10 +8,10 @@ interface Card {
   card_type: string;
   set_code: string;
   has_alt_art: number;
-  img_base64?: string;
   image_id?: number;
   set_rarity?: string;
   sets?: string[];
+  img_path?: string;
 }
 
 
@@ -34,6 +34,8 @@ export default function App() {
     if (selectedSet !== "ALL") params.set = selectedSet;
     invoke<Card[]>("load_cards_with_images", params).then(setCards);
   }, [search, selectedSet]);
+
+
 
   return (
     <div style={{ padding: 24 }}>
@@ -79,7 +81,11 @@ export default function App() {
               <td>{c.name}</td>
               <td>{c.card_type}</td>
               <td>
-                {c.img_base64 ? <img src={`data:image/jpeg;base64,${c.img_base64}`} width={80}/> : "Kein Bild"}
+                <img
+                  src={c.img_path?.replace("asset://", "/")}
+                  width={80}
+                  loading="lazy"
+                />
               </td>
               {selectedSet === "ALL" && <td>{c.sets?.join(", ") ?? "-"}</td>}
               {selectedSet !== "ALL" && <td>{c.set_rarity ?? "-"}</td>}

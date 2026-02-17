@@ -1,7 +1,5 @@
-use base64::prelude::*;
 use rusqlite::{Connection};
 use serde::Serialize;
-use std::fs;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use rusqlite::named_params;
@@ -34,7 +32,7 @@ struct Card {
     card_type: String,
     set_code: Option<String>,
     has_alt_art: i64,
-    img_base64: Option<String>,
+    img_path: Option<String>,
     image_id: Option<i64>,
     sets: Option<Vec<String>>,
     set_rarity: Option<String>,
@@ -53,17 +51,21 @@ struct RawRow {
     set_rarity: Option<String>,
 }
 
-fn load_image_base64(path: &Option<String>) -> Option<String> {
-    path.as_ref().and_then(|p| {
+/// Normalizes a path and converts it to a Tauri asset:// URL
+fn normalize_img_path(path: Option<String>) -> Option<String> {
+    path.map(|p| {
+        // Replace backslashes with forward slashes
         let fixed = p.replace("\\", "/");
 
-        let mut full_path = get_project_root();
-        full_path.push("ressources");
-        full_path.push(fixed);   // e.g. img/12345.jpg
+        // Extract only "img/filename.jpg" if present
+        let img_path = if let Some(idx) = fixed.find("img/") {
+            fixed[idx..].to_string()
+        } else {
+            fixed
+        };
 
-        fs::read(full_path)
-            .ok()
-            .map(|bytes| BASE64_STANDARD.encode(bytes))
+        // Prepend "asset://" so Tauri can serve it correctly
+        format!("asset://{}", img_path)
     })
 }
 
@@ -94,7 +96,7 @@ fn load_cards_with_images(
         WHERE (:name IS NULL OR c.name LIKE :name)
         AND (:card_type IS NULL OR c.type = :card_type)
         AND (:set IS NULL OR cs.set_name = :set)
-        LIMIT 50
+        LIMIT 1
     ";
 
 
@@ -114,8 +116,8 @@ fn load_cards_with_images(
             card_type: row.get("type")?,
             set_code: row.get("set_code")?,
             has_alt_art: row.get("has_alt_art")?,
-            image_id: row.get("image_id")?,
             img_path: row.get("local_path")?,
+            image_id: row.get("image_id")?,
             set_name: row.get("set_name").ok(),
             set_rarity: row.get("set_rarity").ok(),
         })
@@ -135,18 +137,20 @@ fn load_cards_with_images(
         let mut map: HashMap<i64, Card> = HashMap::new();
 
         for r in raw_rows {
+            let normalized_path = normalize_img_path(r.img_path.clone());
+            println!("FINAL IMG PATH SENT TO FRONTEND: {:?}", normalized_path);
             let entry = map.entry(r.id).or_insert_with(|| Card {
                 id: r.id,
                 name: r.name.clone(),
                 card_type: r.card_type.clone(),
                 set_code: r.set_code.clone(),
                 has_alt_art: r.has_alt_art.clone(),
-                img_base64: load_image_base64(&r.img_path),
+                img_path: normalize_img_path(r.img_path),
                 image_id: r.image_id,
                 sets: Some(Vec::new()),
                 set_rarity: None,
             });
-
+            
             if let Some(set_name) = r.set_name {
                 if let Some(ref mut sets) = entry.sets {
                     if !sets.contains(&set_name) {
@@ -157,6 +161,7 @@ fn load_cards_with_images(
         }
 
         Ok(map.into_values().collect())
+
     } else {
         // SET FILTER MODE (flat list)
         let cards = raw_rows
@@ -167,7 +172,7 @@ fn load_cards_with_images(
             card_type: r.card_type,
             set_code: r.set_code,
             has_alt_art: r.has_alt_art,
-            img_base64: load_image_base64(&r.img_path),
+            img_path: normalize_img_path(r.img_path),
             image_id: r.image_id,
             sets: None,
             set_rarity: r.set_rarity,
