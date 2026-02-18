@@ -1,4 +1,4 @@
-use rusqlite::{Connection};
+use rusqlite::{Connection, Result};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -96,7 +96,6 @@ fn load_cards_with_images(
         WHERE (:name IS NULL OR c.name LIKE :name)
         AND (:card_type IS NULL OR c.type = :card_type)
         AND (:set IS NULL OR cs.set_name = :set)
-        LIMIT 50
     ";
 
 
@@ -206,11 +205,46 @@ fn get_all_sets() -> Result<Vec<String>, String> {
     Ok(sets)
 }
 
+#[tauri::command]
+fn get_all_rarities() -> Result<Vec<String>, String> {
+    let db_path = get_db_path();
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT DISTINCT set_rarity 
+            FROM card_sets
+            WHERE set_rarity IS NOT NULL")
+        .map_err(|e| e.to_string())?;
+
+    let rarity_iter = stmt
+        .query_map([], |row| {
+            let rarity: String = row.get(0)?;
+            Ok(rarity)
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut rarities = Vec::new();
+
+    for rarity in rarity_iter {
+        rarities.push(rarity.map_err(|e| e.to_string())?);
+    }
+
+    println!("RARITIES FROM DB:");
+    for r in &rarities {
+        println!(" - {}", r);
+    }
+
+    Ok(rarities)
+}
+
+
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             load_cards_with_images,
-            get_all_sets
+            get_all_sets,
+            get_all_rarities
         ])
         .run(tauri::generate_context!())
         .expect("error running app");
