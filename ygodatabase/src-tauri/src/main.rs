@@ -96,7 +96,7 @@ fn load_cards_with_images(
         WHERE (:name IS NULL OR c.name LIKE :name)
         AND (:card_type IS NULL OR c.type = :card_type)
         AND (:set IS NULL OR cs.set_name = :set)
-        LIMIT 1
+        LIMIT 50
     ";
 
 
@@ -137,8 +137,6 @@ fn load_cards_with_images(
         let mut map: HashMap<i64, Card> = HashMap::new();
 
         for r in raw_rows {
-            let normalized_path = normalize_img_path(r.img_path.clone());
-            println!("FINAL IMG PATH SENT TO FRONTEND: {:?}", normalized_path);
             let entry = map.entry(r.id).or_insert_with(|| Card {
                 id: r.id,
                 name: r.name.clone(),
