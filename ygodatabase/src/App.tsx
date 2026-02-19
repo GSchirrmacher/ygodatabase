@@ -44,7 +44,7 @@ export default function App() {
   }
 
   const rarityGroups: Record<string, string[]> = {
-    collectors_rare:[
+    collectors_rare: [
       "Collector's Rare",
       "Cr",
     ],
@@ -54,27 +54,27 @@ export default function App() {
       "Duel Terminal Normal Parallel Rare",
       "Duel Terminal Normal Rare Parallel Rare",
     ],
-    extra_secret_rare:[
+    extra_secret_rare: [
       "Extra Secret",
       "Extra Secret Rare"
     ],
-    ghost_rare:[
+    ghost_rare: [
       "Ghost Rare",
       "Ghost/Gold Rare",
     ],
-    gold_rare:[
+    gold_rare: [
       "Gold Rare",
     ],
-    gold_secret_rare:[
+    gold_secret_rare: [
       "Gold Secret Rare",
     ],
-    mosaic_rare:[
+    mosaic_rare: [
       "Mosaic Rare",
     ],
-    parallel_rare:[
+    parallel_rare: [
       "Normal Parallel Rare",   
     ],
-    platinum_rare:[
+    platinum_rare: [
       "Platinum Rare",
     ],
     platinum_secret_rare: [
@@ -104,7 +104,7 @@ export default function App() {
       "10000 Secret Rare",
       "Ultra Secret Rare",
     ],
-    starfoil:[
+    starfoil: [
       "Starfoil",
       "Starfoil Rare"
     ],
@@ -144,59 +144,59 @@ export default function App() {
 
   const rarityGroupColors: Record<string, string> = {
     collectors_rare: "",
-    common: "#999",
-    extra_secret_rare: "",
-    ghost_rare: "",
-    gold_rare: "",
-    gold_secret_rare: "#3498db",
-    mosaic_rare: "#9b59b6",
+    common: "#030303",
+    extra_secret_rare: "#ff00dd",
+    ghost_rare: "#ffffff",
+    gold_rare: "#ddb812",
+    gold_secret_rare: "#ddb812",
+    mosaic_rare: "#4cd64c",
     parallel_rare: "#f1c40f",
-    platinum_rare: "#e74c3c",
-    platinum_secret_rare: "",
-    premium_gold_rare: "",
-    quarter_century_secret_rare: "",
-    rare: "",
-    secret_parallel_rare: "",
-    secret_rare: "",
-    shatterfoil: "",
-    special: "",
-    starfoil: "",
-    starlight_rare: "",
-    super_parallel_rare: "",
-    super_rare: "",
-    ultimate_rare: "",
-    ultra_parallel_rare: "",
-    ultra_rare: "",
-    unknown: "",
+    platinum_rare: "#777777",
+    platinum_secret_rare: "#9b59b6",
+    premium_gold_rare: "#ddb812",
+    quarter_century_secret_rare: "#e74c3c",
+    rare: "#363636",
+    secret_parallel_rare: "#9b59b6",
+    secret_rare: "#9b59b6",
+    shatterfoil: "#4cd64c",
+    special: "#4cd64c",
+    starfoil: "#4cd64c",
+    starlight_rare: "#ff00dd",
+    super_parallel_rare: "#f1ff6f",
+    super_rare: "#f1ff6f",
+    ultimate_rare: "#3801ff",
+    ultra_parallel_rare: "#6194e0",
+    ultra_rare: "#6194e0",
+    unknown: "#030303",
   };
 
 
   const rarityGroupIcons: Record<string, string> = {
-    collectors_rare: "/rarity/collectors_rare.png",
-    common: "/rarity/common.png",
-    extra_secret_rare: "/rarity/extra_secret_rare.png",
-    ghost_rare: "/rarity/ghost_rare.png",
-    gold_rare: "/rarity/gold_rare.png",
-    gold_secret_rare: "/rarity/gold_secret_rare.png",
-    mosaic_rare: "/rarity/mosaic_rare.png",
-    parallel_rare: "/rarity/parallel_rare.png",
-    platinum_rare: "/rarity/platinum_rare.png",
-    platinum_secret_rare: "/rarity/platinum_secret_rare.png",
-    premium_gold_rare: "/rarity/premium_gold_rare.png",
-    quarter_century_secret_rare: "/rarity/quarter_century_secret_rare.png",
-    rare: "/rarity/rare.png",
-    secret_parallel_rare: "/rarity/secret_parallel_rare.png",
-    secret_rare: "/rarity/secret_rare.png",
-    shatterfoil: "/rarity/shatterfoil.png",
-    special: "/rarity/special.png",
-    starfoil: "/rarity/starfoil.png",
-    starlight_rare: "/rarity/starlight_rare.png",
-    super_parallel_rare: "/rarity/super_parallel_rare.png",
-    super_rare: "/rarity/super_rare.png",
-    ultimate_rare: "/rarity/ultimate_rare.png",
-    ultra_parallel_rare: "/rarity/ultra_parallel_rare.png",
-    ultra_rare: "/rarity/ultra_rare.png",
-    unknown: "/rarity/token.png",  
+    collectors_rare: "/rarities/collectors_rare.png",
+    common: "/rarities/common.png",
+    extra_secret_rare: "/rarities/extra_secret_rare.png",
+    ghost_rare: "/rarities/ghost_rare.png",
+    gold_rare: "/rarities/gold_rare.png",
+    gold_secret_rare: "/rarities/gold_secret_rare.png",
+    mosaic_rare: "/rarities/mosaic_rare.png",
+    parallel_rare: "/rarities/parallel_rare.png",
+    platinum_rare: "/rarities/platinum_rare.png",
+    platinum_secret_rare: "/rarities/platinum_secret_rare.png",
+    premium_gold_rare: "/rarities/premium_gold_rare.png",
+    quarter_century_secret_rare: "/rarities/quarter_century_secret_rare.png",
+    rare: "/rarities/rare.png",
+    secret_parallel_rare: "/rarities/secret_parallel_rare.png",
+    secret_rare: "/rarities/secret_rare.png",
+    shatterfoil: "/rarities/shatterfoil.png",
+    special: "/rarities/special.png",
+    starfoil: "/rarities/starfoil.png",
+    starlight_rare: "/rarities/starlight_rare.png",
+    super_parallel_rare: "/rarities/super_parallel_rare.png",
+    super_rare: "/rarities/super_rare.png",
+    ultimate_rare: "/rarities/ultimate_rare.png",
+    ultra_parallel_rare: "/rarities/ultra_parallel_rare.png",
+    ultra_rare: "/rarities/ultra_rare.png",
+    unknown: "/rarities/token.png",  
   };
 
   // Load sets + initial cards
@@ -225,16 +225,6 @@ export default function App() {
     }
 
     return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    invoke<string[]>("get_all_rarities")
-      .then((rarities) => {
-        console.log("RARITIES FROM BACKEND:", rarities);
-      })
-      .catch((err) => {
-        console.error("Error loading rarities:", err);
-      });
   }, []);
 
   return (

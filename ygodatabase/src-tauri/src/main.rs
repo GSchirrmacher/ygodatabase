@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use rusqlite::named_params;
 
-// TODO : set_code anstatt image_id als identifier?
-// TODO : scraper updaten, dass mehrere Karten mit alt arts vorhanden sein können
-
+// TODO : Resizing on smaller window
+// TODO : Compound on set view, show rarity symbol + additional rarity symbol if only 1 other rarity is available or a [+x] badge where the amount of rarities is > 1
+// TODO : Add amount view and additional informations to card details view
 fn get_project_root() -> PathBuf {
     let mut exe = std::env::current_exe().expect("Failed to get exe path");
 
@@ -205,46 +205,11 @@ fn get_all_sets() -> Result<Vec<String>, String> {
     Ok(sets)
 }
 
-#[tauri::command]
-fn get_all_rarities() -> Result<Vec<String>, String> {
-    let db_path = get_db_path();
-    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT DISTINCT set_rarity 
-            FROM card_sets
-            WHERE set_rarity IS NOT NULL")
-        .map_err(|e| e.to_string())?;
-
-    let rarity_iter = stmt
-        .query_map([], |row| {
-            let rarity: String = row.get(0)?;
-            Ok(rarity)
-        })
-        .map_err(|e| e.to_string())?;
-
-    let mut rarities = Vec::new();
-
-    for rarity in rarity_iter {
-        rarities.push(rarity.map_err(|e| e.to_string())?);
-    }
-
-    println!("RARITIES FROM DB:");
-    for r in &rarities {
-        println!(" - {}", r);
-    }
-
-    Ok(rarities)
-}
-
-
-
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             load_cards_with_images,
-            get_all_sets,
-            get_all_rarities
+            get_all_sets
         ])
         .run(tauri::generate_context!())
         .expect("error running app");
