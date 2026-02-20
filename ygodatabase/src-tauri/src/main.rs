@@ -4,9 +4,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use rusqlite::named_params;
 
-// TODO : Resizing on smaller window
-// TODO : Compound on set view, show rarity symbol + additional rarity symbol if only 1 other rarity is available or a [+x] badge where the amount of rarities is > 1
-// TODO : Add amount view and additional informations to card details view
+
+// TODO : Fix alternate Rares in Sets showing up while there are none (needs to be fixed in database since it is nowhere stated there)
+// TODO : Add more infos to card details
+// TODO : Add collection view
+// TODO : Add prices/pricing of collection
 fn get_project_root() -> PathBuf {
     let mut exe = std::env::current_exe().expect("Failed to get exe path");
 
@@ -16,6 +18,7 @@ fn get_project_root() -> PathBuf {
 
     exe
 }
+
 
 fn get_db_path() -> PathBuf {
     let mut root = get_project_root();
@@ -38,6 +41,7 @@ struct Card {
     set_rarity: Option<String>,
 }
 
+
 #[derive(Debug)]
 struct RawRow {
     id: i64,
@@ -50,6 +54,7 @@ struct RawRow {
     set_name: Option<String>,
     set_rarity: Option<String>,
 }
+
 
 /// Normalizes a path and converts it to a Tauri asset:// URL
 fn normalize_img_path(path: Option<String>) -> Option<String> {
@@ -179,6 +184,7 @@ fn load_cards_with_images(
     }
 }
 
+
 #[tauri::command]
 fn get_all_sets() -> Result<Vec<String>, String> {
     let db_path = get_db_path();
@@ -204,6 +210,7 @@ fn get_all_sets() -> Result<Vec<String>, String> {
 
     Ok(sets)
 }
+
 
 fn main() {
     tauri::Builder::default()

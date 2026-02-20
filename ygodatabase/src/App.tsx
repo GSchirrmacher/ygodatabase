@@ -199,6 +199,23 @@ export default function App() {
     unknown: "/rarities/token.png",  
   };
 
+  const groupedCards = Object.values(
+    cards.reduce((acc, card) => {
+      const key=`${card.id}-${card.image_id ?? "base"}-${card.set_code ?? "none"}`;
+
+      if (!acc[key]) {
+        acc[key] = {
+          ...card,
+          rarities: card.set_rarity ? [card.set_rarity] : [],
+        };
+      } else if (card.set_rarity) {
+        acc[key].rarities.push(card.set_rarity);
+      }
+
+      return acc;
+    }, {} as Record<string, Card & { rarities: string[] }>)
+  );
+  
   // Load sets + initial cards
   useEffect(() => {
     invoke<string[]>("get_all_sets").then(setSets);
@@ -248,19 +265,18 @@ export default function App() {
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      <div style={{ display: "flex", flexDirection: "row", gap: 20 }}>
+      <div style={{ display: "flex", flexDirection: "row", gap: 20, minWidth: 20 }}>
         
         {/* LEFT: CARD GRID */}
         <div
           ref={gridRef}
-          style={{ flex: 3, height: "calc(100vh - 180px)" }}
+          style={{ flex: 3, minWidth: 0, height: "calc(100vh - 180px)", overflow: "hidden" }}
         >
           {gridWidth > 0 && (() => {
             const CARD_WIDTH = 140;
             const CARD_HEIGHT = 200;
-
             const columnCount = Math.max(1, Math.floor(gridWidth / CARD_WIDTH));
-            const rowCount = Math.ceil(cards.length / columnCount);
+            const rowCount = Math.ceil(groupedCards.length / columnCount);
 
             return (
               <List
@@ -270,7 +286,7 @@ export default function App() {
                 rowProps={{}}
                 rowComponent={({ index, style }) => {
                   const start = index * columnCount;
-                  const rowCards = cards.slice(start, start + columnCount);
+                  const rowCards = groupedCards.slice(start, start + columnCount);
 
                   return (
                     <div
@@ -289,9 +305,6 @@ export default function App() {
                             : group
                             ? rarityGroupColors[group]
                             : "#ccc";
-
-                        const rarityIcon =
-                          group ? rarityGroupIcons[group] : undefined;
 
                         return (
                           <div
@@ -315,20 +328,70 @@ export default function App() {
                             />
 
                             {/* RARITY ICON OVERLAY */}
-                            {rarityIcon && (
-                              <img
-                                src={rarityIcon}
-                                width={24}
-                                style={{
-                                  position: "absolute",
-                                  bottom: 6,
-                                  right: 6,
-                                  background: "rgba(0,0,0,0.6)",
-                                  padding: 3,
-                                  borderRadius: 6,
-                                }}
-                              />
-                            )}
+                            {c.rarities && c.rarities.length > 0 && (() => {
+                              const primaryGroup = getRarityGroup(c.rarities[0]);
+                              const primaryIcon = rarityGroupIcons[primaryGroup];
+
+                              const additionalCount = c.rarities.length - 1;
+
+                              return (
+                                <>
+                                  {/* Primary Icon */}
+                                  {primaryIcon && (
+                                    <img
+                                      src={primaryIcon}
+                                      width={24}
+                                      style={{
+                                        position: "absolute",
+                                        bottom: 6,
+                                        right: 36,
+                                        background: "rgba(0,0,0,0.6)",
+                                        padding: 3,
+                                        borderRadius: 6,
+                                      }}
+                                    />
+                                  )}
+
+                                  {/* Secondary Icon OR +x */}
+                                  {additionalCount === 1 && (() => {
+                                    const secondGroup = getRarityGroup(c.rarities[1]);
+                                    const secondIcon = rarityGroupIcons[secondGroup];
+
+                                    return secondIcon ? (
+                                      <img
+                                        src={secondIcon}
+                                        width={24}
+                                        style={{
+                                          position: "absolute",
+                                          bottom: 6,
+                                          right: 6,
+                                          background: "rgba(0,0,0,0.6)",
+                                          padding: 3,
+                                          borderRadius: 6,
+                                        }}
+                                      />
+                                    ) : null;
+                                  })()}
+
+                                  {additionalCount > 1 && (
+                                    <div
+                                      style={{
+                                        position: "absolute",
+                                        bottom: 6,
+                                        right: 6,
+                                        background: "rgba(0,0,0,0.75)",
+                                        color: "white",
+                                        fontSize: 12,
+                                        padding: "2px 6px",
+                                        borderRadius: 6,
+                                      }}
+                                    >
+                                      +{additionalCount}
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                         );
                       })}
@@ -344,10 +407,12 @@ export default function App() {
         <div
           style={{
             flex: 2,
+            minWidth: 0,
             padding: 20,
             border: "1px solid #ccc",
             borderRadius: 8,
             minHeight: 600,
+            overflow: "auto",
           }}
        >
          {!selectedCard && <p>Select a card</p>}
@@ -361,13 +426,14 @@ export default function App() {
                 <h2>{selectedCard.name}</h2>
 
                 <img
-                  src={selectedCard.img_path?.replace("asset://", "/")}
+                  src={selectedCard.img_path?.replace("asset://img/", "/img_cropped/")}
                   width={250}
                   style={{ marginBottom: 15 }}
                 />
 
                 <p><strong>ID:</strong> {selectedCard.id}</p>
                 <p><strong>Type:</strong> {selectedCard.card_type}</p>
+                <p><strong></strong></p>
 
                 {selectedCard.set_rarity && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
