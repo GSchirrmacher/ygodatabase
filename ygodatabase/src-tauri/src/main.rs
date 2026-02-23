@@ -6,7 +6,7 @@ use rusqlite::named_params;
 
 
 // TODO : Fix alternate Rares in Sets showing up while there are none (needs to be fixed in database since it is nowhere stated there)
-// TODO : Add more infos to card details
+
 // TODO : Add collection view
 // TODO : Add prices/pricing of collection
 fn get_project_root() -> PathBuf {
@@ -36,9 +36,24 @@ struct Card {
     set_code: Option<String>,
     has_alt_art: i64,
     img_path: Option<String>,
+
     image_id: Option<i64>,
     sets: Option<Vec<String>>,
     set_rarity: Option<String>,
+    
+    frame_type: Option<String>,
+    attribute: Option<String>,
+    desc: Option<String>,
+
+    level: Option<i64>,
+    atk: Option<i64>,
+    def: Option<i64>,
+    race: Option<String>,
+    scale: Option<i64>,
+    linkval: Option<i64>,
+    typeline: Option<Vec<String>>,
+    collection_amount: Option<i64>,
+    set_price: Option<i64>
 }
 
 
@@ -53,6 +68,18 @@ struct RawRow {
     image_id: Option<i64>,
     set_name: Option<String>,
     set_rarity: Option<String>,
+    frame_type: Option<String>,
+    attribute: Option<String>,
+    desc: Option<String>,
+    level: Option<i64>,
+    atk: Option<i64>,
+    def: Option<i64>,
+    race: Option<String>,
+    scale: Option<i64>,
+    linkval: Option<i64>,
+    typeline: Option<Vec<String>>,
+    collection_amount: Option<i64>,
+    set_price: Option<i64>
 }
 
 
@@ -94,7 +121,19 @@ fn load_cards_with_images(
             ci.local_path, 
             cs.set_code,
             cs.set_name, 
-            cs.set_rarity
+            cs.set_rarity,
+            c.frameType,
+            c.attribute,
+            c.desc,
+            c.level,
+            c.atk,
+            c.def,
+            c.race,
+            c.scale,
+            c.linkval,
+            c.typeline,
+            cs.collection_amount,
+            cs.set_price
         FROM cards c
         LEFT JOIN card_images ci ON c.id = ci.card_id
         LEFT JOIN card_sets cs ON c.id = cs.card_id
@@ -124,6 +163,20 @@ fn load_cards_with_images(
             image_id: row.get("image_id")?,
             set_name: row.get("set_name").ok(),
             set_rarity: row.get("set_rarity").ok(),
+            frame_type: row.get("frameType").ok(),
+            attribute: row.get("attribute").ok(),
+            desc: row.get("desc").ok(),
+            level: row.get("level").ok(),
+            atk: row.get("atk").ok(),
+            def: row.get("def").ok(),
+            race: row.get("race").ok(),
+            scale: row.get("scale").ok(),
+            linkval: row.get("linkval").ok(),
+            typeline: row
+                .get::<_, Option<String>>("typeline")?
+                .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok()),
+            collection_amount: row.get("collection_amount").ok(),
+            set_price: row.get("set_price").ok(),
         })
     })
     .map_err(|e| e.to_string())?;
@@ -151,6 +204,18 @@ fn load_cards_with_images(
                 image_id: r.image_id,
                 sets: Some(Vec::new()),
                 set_rarity: None,
+                frame_type: r.frame_type.clone(),
+                attribute: r.attribute.clone(),
+                desc: r.desc.clone(),
+                level: r.level.clone(),
+                atk: r.atk.clone(),
+                def: r.def.clone(),
+                race: r.race.clone(),
+                scale: r.scale.clone(),
+                linkval: r.linkval.clone(),
+                typeline: r.typeline.clone(),
+                collection_amount: r.collection_amount.clone(),
+                set_price: r.set_price.clone(),
             });
             
             if let Some(set_name) = r.set_name {
@@ -178,6 +243,18 @@ fn load_cards_with_images(
             image_id: r.image_id,
             sets: None,
             set_rarity: r.set_rarity,
+            frame_type: r.frame_type,
+            attribute: r.attribute,
+            desc: r.desc,
+            level: r.level,
+            atk: r.atk,
+            def: r.def,
+            race: r.race,
+            scale: r.scale,
+            linkval: r.linkval,
+            typeline: r.typeline,
+            collection_amount: r.collection_amount,
+            set_price: r.set_price,
         })
         .collect();
         Ok(cards)

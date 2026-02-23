@@ -9,14 +9,27 @@ interface Card {
   id: number;
   name: string;
   card_type: string;
-  set_code: string;
+  set_code?: string;
   has_alt_art: number;
   image_id?: number;
   set_rarity?: string;
   sets?: string[];
   img_path?: string;
-}
 
+  frameType?: string;
+  attribute?: string;
+  desc?: string;
+
+  level?: number;
+  atk?: number;
+  def?: number;
+  race?: string;
+  scale?: number;
+  linkval?: number;
+  typeline?: string[];
+  collection_amount?: number;
+  set_price?: number;
+}
 
 
 export default function App() {
@@ -199,10 +212,21 @@ export default function App() {
     unknown: "/rarities/token.png",  
   };
 
+  const FRAME_COLORS: Record<string, string> = {
+    normal: "#d4af37",
+    effect: "#d67c2f",
+    fusion: "#7b4fa3",
+    synchro: "#f5f5f5",
+    xyz: "#111111",
+    link: "#1f3c88",
+    ritual: "#4aa3df",
+    spell: "#1f8f7a",
+    trap: "#c04c9b",
+  };
+
   const groupedCards = Object.values(
     cards.reduce((acc, card) => {
       const key=`${card.id}-${card.image_id ?? "base"}-${card.set_code ?? "none"}`;
-
       if (!acc[key]) {
         acc[key] = {
           ...card,
@@ -216,6 +240,128 @@ export default function App() {
     }, {} as Record<string, Card & { rarities: string[] }>)
   );
   
+  function getFrameBackground(frameType?: string) {
+    if (!frameType) return "#ccc";
+
+    if (frameType.includes("_pendulum")) {
+      const base = frameType.replace("_pendulum", "");
+      const left = FRAME_COLORS[base] ?? "#ccc";
+      const right = FRAME_COLORS["spell"];
+
+      return `linear-gradient(to right, ${left} 0%, ${left} 48%, ${right} 52%, ${right} 100%)`;
+    }
+
+    return FRAME_COLORS[frameType] ?? "#ccc";
+  }
+
+  function getIconPath(path: string) {
+    return `/icons/${path}`;
+  }
+
+  function renderIconOrText(path: string, fallback: string) {
+    return (
+      <img
+        src={path}
+        onError={(e) => {
+          (e.target as HTMLImageElement).style.display = "none";
+        }}
+        style={{ height: 18, marginRight: 6 }}
+        alt={fallback}
+      />
+    );
+  }
+
+  function renderStats(card: any) {
+    const type = card.frameType;
+    if (!type) return null;
+
+    const isPendulum = type.includes("_pendulum");
+    const baseType = type.replace("_pendulum", "");
+
+    const rows: React.ReactNode[] = [];
+
+    if (["normal","effect","fusion","synchro","ritual"].includes(baseType)) {
+      rows.push(statRow("Level", card.level, "Level.png"));
+      rows.push(statRow("ATK", card.atk));
+      rows.push(statRow("DEF", card.def));
+      rows.push(statRow("Type", card.race, `types/${card.race}.png`));
+    }
+
+    if (baseType === "xyz") {
+      rows.push(statRow("Rank", card.level, "Rank.png"));
+      rows.push(statRow("ATK", card.atk));
+      rows.push(statRow("DEF", card.def));
+      rows.push(statRow("Type", card.race, `types/${card.race}.png`));
+    }
+
+    if (baseType === "link") {
+      rows.push(statRow("L", card.linkval));
+      rows.push(statRow("ATK", card.atk));
+      rows.push(statRow("Type", card.race, `types/${card.race}.png`));
+    }
+
+    if (["spell","trap"].includes(baseType)) {
+      rows.push(statRow("Type", card.race, `types/${card.race}.png`));
+    }
+
+    if (isPendulum) {
+      rows.push(statRow("Scale", card.scale, "Scale.png"));
+    }
+
+    return <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{rows}</div>;
+  }
+
+  function formatTypeline(card: any) {
+    if (card.typeline && Array.isArray(card.typeline)) {
+      return `[${card.typeline.join("/")}]`;
+    }
+
+    if (card.frameType) {
+      return `[${card.frameType.charAt(0).toUpperCase() + card.frameType.slice(1)}]`;
+    }
+
+    return "";
+  }
+
+  async function updateCollection(rarityRow: any, delta: number) {
+    const newValue = Math.max(0, (rarityRow.collection_amount ?? 0) + delta);
+
+    // TODO later: call backend to persist
+    rarityRow.collection_amount = newValue;
+
+    // Force React refresh
+    setSelectedCard((prev) => prev ? { ...prev } : prev);
+  }
+
+  function renderRarityRow(r: any) {
+
+    const group = getRarityGroup(r.set_rarity);
+    const icon = rarityGroupIcons[group];
+
+    return (
+      <div key={`${r.id}-${r.set_code}-${r.set_rarity}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {icon && <img src={icon} style={{ height: 20 }} />}
+
+        <span>{r.collection_amount ?? 0}</span>
+
+        <button onClick={() => updateCollection(r, 1)}>+</button>
+        <button onClick={() => updateCollection(r, -1)} disabled={(r.collection_amount ?? 0) <= 0}>-</button>
+
+        <span>{r.set_price ?? "-"}</span>
+      </div>
+    );
+  }
+
+  function statRow(label: string, value: any, iconFile?: string) {
+    return (
+      <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {iconFile && renderIconOrText(getIconPath(iconFile), label)}
+        <strong>{label}:</strong> {value ?? "-"}
+      </div>
+    );
+  }
+
+
   // Load sets + initial cards
   useEffect(() => {
     invoke<string[]>("get_all_sets").then(setSets);
@@ -411,52 +557,91 @@ export default function App() {
             padding: 20,
             border: "1px solid #ccc",
             borderRadius: 8,
-            minHeight: 600,
             overflow: "auto",
           }}
-       >
-         {!selectedCard && <p>Select a card</p>}
+        >
+          {!selectedCard && <p>Select a card</p>}
 
-          {selectedCard && (() => {
-            const group = getRarityGroup(selectedCard.set_rarity);
-            const rarityIcon = group ? rarityGroupIcons[group] : undefined;
+          {selectedCard && (
+            <>
+              {/* NAME + ATTRIBUTE */}
+              <div
+                style={{
+                  background: getFrameBackground(selectedCard.frameType),
+                  padding: "10px 15px",
+                  borderRadius: 6,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 15,
+                }}
+              >
+                <h2 style={{ margin: 0 }}>{selectedCard.name}</h2>
 
-            return (
-              <>
-                <h2>{selectedCard.name}</h2>
+                {selectedCard.attribute && (
+                  <img
+                    src={`/icons/attributes/${selectedCard.attribute}.png`}
+                    style={{ height: 28 }}
+                  />
+                )}
+              </div>
 
+              {/* IMAGE + STATS */}
+              <div style={{ display: "flex", gap: 20 }}>
                 <img
-                  src={selectedCard.img_path?.replace("asset://img/", "/img_cropped/")}
+                  src={selectedCard.img_path?.replace("asset://", "/")}
                   width={250}
-                  style={{ marginBottom: 15 }}
                 />
 
-                <p><strong>ID:</strong> {selectedCard.id}</p>
-                <p><strong>Type:</strong> {selectedCard.card_type}</p>
-                <p><strong></strong></p>
+                {renderStats(selectedCard)}
+              </div>
 
-                {selectedCard.set_rarity && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <strong>Rarity:</strong>
-                    <span>{selectedCard.set_rarity}</span>
-                    {rarityIcon && (
-                      <img
-                        src={rarityIcon}
-                        width={28}
-                      />
-                    )}
-                  </div>
-                )}
+              {/* TYPELINE BAR */}
+              <div
+                style={{
+                  marginTop: 15,
+                  padding: 8,
+                  borderRadius: 4,
+                  background: getFrameBackground(selectedCard.frameType),
+                  textAlign: "center",
+                  fontWeight: "bold",
+                }}
+              >
+                {formatTypeline(selectedCard)}
+              </div>
 
-                {selectedSet === "ALL" && (
-                  <p>
-                    <strong>Sets:</strong>{" "}
-                    {selectedCard.sets?.join(", ") ?? "-"}
-                  </p>
-                )}
-              </>
-            );
-          })()}
+              {/* DESCRIPTION */}
+              <div style={{ marginTop: 15, whiteSpace: "pre-wrap" }}>
+                {selectedCard.desc}
+              </div>
+
+              {/* SET / RARITY SECTION */}
+              <div style={{ marginTop: 20 }}>
+                {selectedCard && (() => {
+                  const related = cards.filter(c => c.id === selectedCard.id);
+
+                  if (selectedSet !== "ALL") {
+                    return related.map(renderRarityRow);
+                  }
+
+                  const bySet: Record<string, any[]> = {};
+
+                  for (const r of related) {
+                    const setName = r.set_code ?? "Unknown";
+                    if (!bySet[setName]) bySet[setName] = [];
+                    bySet[setName].push(r);
+                  }
+
+                  return Object.entries(bySet).map(([setName, rows]) => (
+                    <div key={setName} style={{ marginBottom: 12 }}>
+                      <h4>{setName}</h4>
+                      {rows.map(renderRarityRow)}
+                    </div>
+                  ));
+                })()}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
