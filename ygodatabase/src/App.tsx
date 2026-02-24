@@ -27,6 +27,7 @@ interface Card {
   scale?: number;
   linkval?: number;
   typeline?: string[];
+
   collection_amount?: number;
   set_price?: number;
 }
@@ -242,16 +243,17 @@ export default function App() {
   
   function getFrameBackground(frameType?: string) {
     if (!frameType) return "#ccc";
+    const normalized = frameType.toLowerCase();
 
-    if (frameType.includes("_pendulum")) {
-      const base = frameType.replace("_pendulum", "");
+    if (normalized.includes("_pendulum")) {
+      const base = normalized.replace("_pendulum", "");
       const left = FRAME_COLORS[base] ?? "#ccc";
       const right = FRAME_COLORS["spell"];
 
       return `linear-gradient(to right, ${left} 0%, ${left} 48%, ${right} 52%, ${right} 100%)`;
     }
 
-    return FRAME_COLORS[frameType] ?? "#ccc";
+    return FRAME_COLORS[normalized] ?? "#ccc";
   }
 
   function getIconPath(path: string) {
@@ -281,7 +283,7 @@ export default function App() {
     const rows: React.ReactNode[] = [];
 
     if (["normal","effect","fusion","synchro","ritual"].includes(baseType)) {
-      rows.push(statRow("Level", card.level, "Level.png"));
+      rows.push(statRow("Level", card.level, "icons/Level.png"));
       rows.push(statRow("ATK", card.atk));
       rows.push(statRow("DEF", card.def));
       rows.push(statRow("Type", card.race, `types/${card.race}.png`));
@@ -323,14 +325,19 @@ export default function App() {
     return "";
   }
 
-  async function updateCollection(rarityRow: any, delta: number) {
-    const newValue = Math.max(0, (rarityRow.collection_amount ?? 0) + delta);
+  async function updateCollection(row: any, delta: number) {
+    const newValue = Math.max(0, (row.collection_amount ?? 0) + delta);
 
-    // TODO later: call backend to persist
-    rarityRow.collection_amount = newValue;
+    await invoke("update_collection_amount", {
+      cardId: row.id,
+      setCode: row.set_code,
+      rarity: row.set_rarity,
+      amount: newValue,
+    });
 
-    // Force React refresh
-    setSelectedCard((prev) => prev ? { ...prev } : prev);
+    row.collection_amount = newValue;
+
+    setCards([...cards]);
   }
 
   function renderRarityRow(r: any) {

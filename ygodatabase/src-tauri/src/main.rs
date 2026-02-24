@@ -288,12 +288,34 @@ fn get_all_sets() -> Result<Vec<String>, String> {
     Ok(sets)
 }
 
+#[tauri::command]
+fn update_collection_amount(
+    card_id: i64,
+    set_code: String,
+    rarity: String,
+    amount: i64,
+) -> Result<(), String> {
+
+    let conn = Connection::open(get_db_path()).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "UPDATE card_sets
+         SET collection_amount = ?1
+         WHERE card_id = ?2
+         AND set_code = ?3
+         AND set_rarity = ?4",
+        (amount, card_id, set_code, rarity),
+    ).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
 
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             load_cards_with_images,
-            get_all_sets
+            get_all_sets,
+            update_collection_amount
         ])
         .run(tauri::generate_context!())
         .expect("error running app");
