@@ -10,7 +10,7 @@ interface Card {
   name: string;
   cardType: string;
   setCode?: string;
-  has_alt_art: number;
+  hasAltArt: number;
   imageId?: number;
   setRarity?: string;
   sets?: string[];
@@ -326,35 +326,35 @@ export default function App() {
   }
 
   async function updateCollection(row: any, delta: number) {
-    const newValue = Math.max(0, (row.collection_amount ?? 0) + delta);
+    const newValue = Math.max(0, (row.collectionAmount ?? 0) + delta);
 
     await invoke("update_collection_amount", {
       cardId: row.id,
-      setCode: row.set_code,
-      rarity: row.set_rarity,
+      setCode: row.setCode,
+      rarity: row.setRarity,
       amount: newValue,
     });
 
-    row.collection_amount = newValue;
+    row.collectionAmount = newValue;
 
     setCards([...cards]);
   }
 
   function renderRarityRow(r: any) {
 
-    const group = getRarityGroup(r.set_rarity);
+    const group = getRarityGroup(r.setRarity);
     const icon = rarityGroupIcons[group];
 
     return (
-      <div key={`${r.id}-${r.set_code}-${r.set_rarity}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div key={`${r.id}-${r.setCode}-${r.setRarity}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {icon && <img src={icon} style={{ height: 20 }} />}
 
-        <span>{r.collection_amount ?? 0}</span>
+        <span>{r.collectionAmount ?? 0}</span>
 
         <button onClick={() => updateCollection(r, 1)}>+</button>
         <button onClick={() => updateCollection(r, -1)} disabled={(r.collection_amount ?? 0) <= 0}>-</button>
 
-        <span>{r.set_price ?? "-"}</span>
+        <span>{r.setPrice ?? "-"}</span>
       </div>
     );
   }
