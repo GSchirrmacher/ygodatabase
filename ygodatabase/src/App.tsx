@@ -8,13 +8,13 @@ import "./App.css";
 interface Card {
   id: number;
   name: string;
-  card_type: string;
-  set_code?: string;
+  cardType: string;
+  setCode?: string;
   has_alt_art: number;
-  image_id?: number;
-  set_rarity?: string;
+  imageId?: number;
+  setRarity?: string;
   sets?: string[];
-  img_path?: string;
+  imgPath?: string;
 
   frameType?: string;
   attribute?: string;
@@ -28,8 +28,8 @@ interface Card {
   linkval?: number;
   typeline?: string[];
 
-  collection_amount?: number;
-  set_price?: number;
+  collectionAmount?: number;
+  setPrice?: number;
 }
 
 
@@ -227,14 +227,14 @@ export default function App() {
 
   const groupedCards = Object.values(
     cards.reduce((acc, card) => {
-      const key=`${card.id}-${card.image_id ?? "base"}-${card.set_code ?? "none"}`;
+      const key=`${card.id}-${card.imageId ?? "base"}-${card.setCode ?? "none"}`;
       if (!acc[key]) {
         acc[key] = {
           ...card,
-          rarities: card.set_rarity ? [card.set_rarity] : [],
+          rarities: card.setRarity ? [card.setRarity] : [],
         };
-      } else if (card.set_rarity) {
-        acc[key].rarities.push(card.set_rarity);
+      } else if (card.setRarity) {
+        acc[key].rarities.push(card.setRarity);
       }
 
       return acc;
@@ -283,7 +283,7 @@ export default function App() {
     const rows: React.ReactNode[] = [];
 
     if (["normal","effect","fusion","synchro","ritual"].includes(baseType)) {
-      rows.push(statRow("Level", card.level, "icons/Level.png"));
+      rows.push(statRow("Level", card.level, "Level.png"));
       rows.push(statRow("ATK", card.atk));
       rows.push(statRow("DEF", card.def));
       rows.push(statRow("Type", card.race, `types/${card.race}.png`));
@@ -451,7 +451,7 @@ export default function App() {
                       }}
                     >
                       {rowCards.map((c) => {
-                        const group = getRarityGroup(c.set_rarity);
+                        const group = getRarityGroup(c.setRarity);
                         const rarityColor =
                           selectedCard?.id === c.id
                             ? "#4caf50"
@@ -461,7 +461,7 @@ export default function App() {
 
                         return (
                           <div
-                            key={`${c.id}-${c.set_rarity ?? "none"}-${c.image_id ?? "base"}-${c.set_code ?? "none"}`}
+                            key={`${c.id}-${c.setRarity ?? "none"}-${c.imageId ?? "base"}-${c.setCode ?? "none"}`}
                             style={{
                               position: "relative",
                               cursor: "pointer",
@@ -472,7 +472,7 @@ export default function App() {
                             onClick={() => setSelectedCard(c)}
                           >
                             <img
-                              src={c.img_path?.replace("asset://", "/")}
+                              src={c.imgPath?.replace("asset://", "/")}
                               width={120}
                               style={{
                                 display: "block",
@@ -596,7 +596,7 @@ export default function App() {
               {/* IMAGE + STATS */}
               <div style={{ display: "flex", gap: 20 }}>
                 <img
-                  src={selectedCard.img_path?.replace("asset://", "/")}
+                  src={selectedCard.imgPath?.replace("asset://", "/")}
                   width={250}
                 />
 
@@ -634,7 +634,7 @@ export default function App() {
                   const bySet: Record<string, any[]> = {};
 
                   for (const r of related) {
-                    const setName = r.set_code ?? "Unknown";
+                    const setName = r.setCode ?? "Unknown";
                     if (!bySet[setName]) bySet[setName] = [];
                     bySet[setName].push(r);
                   }

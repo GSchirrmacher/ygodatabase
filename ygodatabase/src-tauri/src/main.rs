@@ -29,6 +29,7 @@ fn get_db_path() -> PathBuf {
 
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Card {
     id: i64,
     name: String,
