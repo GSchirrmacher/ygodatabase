@@ -231,6 +231,7 @@ export default function App() {
       if (!acc[key]) {
         acc[key] = {
           ...card,
+          frameType: card.frameType,
           rarities: card.setRarity ? [card.setRarity] : [],
         };
       } else if (card.setRarity) {
