@@ -6,27 +6,23 @@ use rusqlite::named_params;
 
 
 // TODO : Fix alternate Rares in Sets showing up while there are none (needs to be fixed in database since it is nowhere stated there)
-
 // TODO : Add collection view
 // TODO : Add prices/pricing of collection
-fn get_project_root() -> PathBuf {
-    let mut exe = std::env::current_exe().expect("Failed to get exe path");
-
-    exe.pop(); // ygodatabase.exe
-    exe.pop(); // debug
-    exe.pop(); // target
-
-    exe
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct CardSetRarity {
+    rarity: Option<String>,
+    collection_amount: Option<i64>,
+    set_price: Option<i64>,
 }
 
-
-fn get_db_path() -> PathBuf {
-    let mut root = get_project_root();
-    root.push("ressources");
-    root.push("cards.db");
-    root
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct CardSet {
+    set_code: Option<String>,
+    set_name: Option<String>,
+    rarities: Vec<CardSetRarity>,
 }
-
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,14 +30,10 @@ struct Card {
     id: i64,
     name: String,
     card_type: String,
-    set_code: Option<String>,
     has_alt_art: i64,
     img_path: Option<String>,
-
     image_id: Option<i64>,
-    sets: Option<Vec<String>>,
-    set_rarity: Option<String>,
-    
+
     frame_type: Option<String>,
     attribute: Option<String>,
     desc: Option<String>,
@@ -53,10 +45,9 @@ struct Card {
     scale: Option<i64>,
     linkval: Option<i64>,
     typeline: Option<Vec<String>>,
-    collection_amount: Option<i64>,
-    set_price: Option<i64>
-}
 
+    sets: Vec<CardSet>,
+}
 
 #[derive(Debug)]
 struct RawRow {
@@ -83,6 +74,23 @@ struct RawRow {
     set_price: Option<i64>
 }
 
+fn get_project_root() -> PathBuf {
+    let mut exe = std::env::current_exe().expect("Failed to get exe path");
+
+    exe.pop(); // ygodatabase.exe
+    exe.pop(); // debug
+    exe.pop(); // target
+
+    exe
+}
+
+
+fn get_db_path() -> PathBuf {
+    let mut root = get_project_root();
+    root.push("ressources");
+    root.push("cards.db");
+    root
+}
 
 /// Normalizes a path and converts it to a Tauri asset:// URL
 fn normalize_img_path(path: Option<String>) -> Option<String> {
@@ -190,76 +198,60 @@ fn load_cards_with_images(
 
     let grouped_mode = set.is_none();
 
-    if grouped_mode {
-        // GROUPED MODE (no set filter)
-        let mut map: HashMap<i64, Card> = HashMap::new();
+    let mut map: HashMap<i64, Card> = HashMap::new();
 
-        for r in raw_rows {
-            let entry = map.entry(r.id).or_insert_with(|| Card {
-                id: r.id,
-                name: r.name.clone(),
-                card_type: r.card_type.clone(),
+for r in raw_rows {
+
+    let card = map.entry(r.id).or_insert_with(|| Card {
+        id: r.id,
+        name: r.name.clone(),
+        card_type: r.card_type.clone(),
+        has_alt_art: r.has_alt_art,
+        img_path: normalize_img_path(r.img_path.clone()),
+        image_id: r.image_id,
+
+        frame_type: r.frame_type.clone(),
+        attribute: r.attribute.clone(),
+        desc: r.desc.clone(),
+
+        level: r.level,
+        atk: r.atk,
+        def: r.def,
+        race: r.race.clone(),
+        scale: r.scale,
+        linkval: r.linkval,
+        typeline: r.typeline.clone(),
+
+        sets: Vec::new(),
+    });
+
+    if let Some(set_code) = &r.set_code {
+
+        let set_index = card
+            .sets
+            .iter()
+            .position(|s| s.set_code.as_ref() == Some(set_code));
+
+        let set_ref = if let Some(i) = set_index {
+            &mut card.sets[i]
+        } else {
+            card.sets.push(CardSet {
                 set_code: r.set_code.clone(),
-                has_alt_art: r.has_alt_art.clone(),
-                img_path: normalize_img_path(r.img_path),
-                image_id: r.image_id,
-                sets: Some(Vec::new()),
-                set_rarity: None,
-                frame_type: r.frame_type.clone(),
-                attribute: r.attribute.clone(),
-                desc: r.desc.clone(),
-                level: r.level.clone(),
-                atk: r.atk.clone(),
-                def: r.def.clone(),
-                race: r.race.clone(),
-                scale: r.scale.clone(),
-                linkval: r.linkval.clone(),
-                typeline: r.typeline.clone(),
-                collection_amount: r.collection_amount.clone(),
-                set_price: r.set_price.clone(),
+                set_name: r.set_name.clone(),
+                rarities: Vec::new(),
             });
-            
-            if let Some(set_name) = r.set_name {
-                if let Some(ref mut sets) = entry.sets {
-                    if !sets.contains(&set_name) {
-                        sets.push(set_name);
-                    }
-                }
-            }
-        }
+            card.sets.last_mut().unwrap()
+        };
 
-        Ok(map.into_values().collect())
-
-    } else {
-        // SET FILTER MODE (flat list)
-        let cards = raw_rows
-        .into_iter()
-        .map(|r| Card {
-            id: r.id,
-            name: r.name,
-            card_type: r.card_type,
-            set_code: r.set_code,
-            has_alt_art: r.has_alt_art,
-            img_path: normalize_img_path(r.img_path),
-            image_id: r.image_id,
-            sets: None,
-            set_rarity: r.set_rarity,
-            frame_type: r.frame_type,
-            attribute: r.attribute,
-            desc: r.desc,
-            level: r.level,
-            atk: r.atk,
-            def: r.def,
-            race: r.race,
-            scale: r.scale,
-            linkval: r.linkval,
-            typeline: r.typeline,
+        set_ref.rarities.push(CardSetRarity {
+            rarity: r.set_rarity.clone(),
             collection_amount: r.collection_amount,
             set_price: r.set_price,
-        })
-        .collect();
-        Ok(cards)
+        });
     }
+}
+
+Ok(map.into_values().collect())
 }
 
 

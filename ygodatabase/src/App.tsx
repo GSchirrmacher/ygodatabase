@@ -4,16 +4,24 @@ import { List } from "react-window";
 import { useRef } from "react";
 import "./App.css";
 
+interface CardSetRarity {
+  rarity?: string;
+  collectionAmount?: number;
+  setPrice?: number;
+}
+
+interface CardSet {
+  setCode?: string;
+  setName?: string;
+  rarities: CardSetRarity[];
+}
 
 interface Card {
   id: number;
   name: string;
   cardType: string;
-  setCode?: string;
   hasAltArt: number;
   imageId?: number;
-  setRarity?: string;
-  sets?: string[];
   imgPath?: string;
 
   frameType?: string;
@@ -28,8 +36,7 @@ interface Card {
   linkval?: number;
   typeline?: string[];
 
-  collectionAmount?: number;
-  setPrice?: number;
+  sets: CardSet[];
 }
 
 
@@ -225,22 +232,7 @@ export default function App() {
     trap: "#c04c9b",
   };
 
-  const groupedCards = Object.values(
-    cards.reduce((acc, card) => {
-      const key=`${card.id}-${card.imageId ?? "base"}-${card.setCode ?? "none"}`;
-      if (!acc[key]) {
-        acc[key] = {
-          ...card,
-          frameType: card.frameType,
-          rarities: card.setRarity ? [card.setRarity] : [],
-        };
-      } else if (card.setRarity) {
-        acc[key].rarities.push(card.setRarity);
-      }
-
-      return acc;
-    }, {} as Record<string, Card & { rarities: string[] }>)
-  );
+  const groupedCards = cards;
   
   function getFrameBackground(frameType?: string) {
     if (!frameType) return "#ccc";
@@ -343,17 +335,17 @@ export default function App() {
 
   function renderRarityRow(r: any) {
 
-    const group = getRarityGroup(r.setRarity);
+    const group = getRarityGroup(r.rarity);
     const icon = rarityGroupIcons[group];
 
     return (
-      <div key={`${r.id}-${r.setCode}-${r.setRarity}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div key={`${r.id}-${r.setCode}-${r.rarity}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {icon && <img src={icon} style={{ height: 20 }} />}
 
         <span>{r.collectionAmount ?? 0}</span>
 
         <button onClick={() => updateCollection(r, 1)}>+</button>
-        <button onClick={() => updateCollection(r, -1)} disabled={(r.collection_amount ?? 0) <= 0}>-</button>
+        <button onClick={() => updateCollection(r, -1)} disabled={(r.collectionAmount ?? 0) <= 0}>-</button>
 
         <span>{r.setPrice ?? "-"}</span>
       </div>
@@ -452,7 +444,8 @@ export default function App() {
                       }}
                     >
                       {rowCards.map((c) => {
-                        const group = getRarityGroup(c.setRarity);
+                        const firstRarity = c.sets?.[0]?.rarities?.[0]?.rarity;
+                        const group = getRarityGroup(firstRarity);
                         const rarityColor =
                           selectedCard?.id === c.id
                             ? "#4caf50"
@@ -462,7 +455,7 @@ export default function App() {
 
                         return (
                           <div
-                            key={`${c.id}-${c.setRarity ?? "none"}-${c.imageId ?? "base"}-${c.setCode ?? "none"}`}
+                            key={`${c.id}-${c.imageId ?? "base"}`}
                             style={{
                               position: "relative",
                               cursor: "pointer",
@@ -482,15 +475,15 @@ export default function App() {
                             />
 
                             {/* RARITY ICON OVERLAY */}
-                            {c.rarities && c.rarities.length > 0 && (() => {
-                              const primaryGroup = getRarityGroup(c.rarities[0]);
+                            {c.sets?.[0]?.rarities?.length > 0 && (() => {
+                              const primary = c.sets[0].rarities[0].rarity;
+                              const primaryGroup = getRarityGroup(primary);
                               const primaryIcon = rarityGroupIcons[primaryGroup];
 
-                              const additionalCount = c.rarities.length - 1;
+                              const additionalCount = c.sets[0].rarities.length - 1;
 
                               return (
                                 <>
-                                  {/* Primary Icon */}
                                   {primaryIcon && (
                                     <img
                                       src={primaryIcon}
@@ -506,28 +499,7 @@ export default function App() {
                                     />
                                   )}
 
-                                  {/* Secondary Icon OR +x */}
-                                  {additionalCount === 1 && (() => {
-                                    const secondGroup = getRarityGroup(c.rarities[1]);
-                                    const secondIcon = rarityGroupIcons[secondGroup];
-
-                                    return secondIcon ? (
-                                      <img
-                                        src={secondIcon}
-                                        width={24}
-                                        style={{
-                                          position: "absolute",
-                                          bottom: 6,
-                                          right: 6,
-                                          background: "rgba(0,0,0,0.6)",
-                                          padding: 3,
-                                          borderRadius: 6,
-                                        }}
-                                      />
-                                    ) : null;
-                                  })()}
-
-                                  {additionalCount > 1 && (
+                                  {additionalCount > 0 && (
                                     <div
                                       style={{
                                         position: "absolute",
@@ -625,28 +597,21 @@ export default function App() {
 
               {/* SET / RARITY SECTION */}
               <div style={{ marginTop: 20 }}>
-                {selectedCard && (() => {
-                  const related = cards.filter(c => c.id === selectedCard.id);
+                  {selectedCard && selectedCard.sets.map((set: CardSet) => (
+                    <div key={set.setCode ?? "unknown"} style={{ marginBottom: 12 }}>
+                      <h4>{set.setName ?? set.setCode}</h4>
 
-                  if (selectedSet !== "ALL") {
-                    return related.map(renderRarityRow);
-                  }
-
-                  const bySet: Record<string, any[]> = {};
-
-                  for (const r of related) {
-                    const setName = r.setCode ?? "Unknown";
-                    if (!bySet[setName]) bySet[setName] = [];
-                    bySet[setName].push(r);
-                  }
-
-                  return Object.entries(bySet).map(([setName, rows]) => (
-                    <div key={setName} style={{ marginBottom: 12 }}>
-                      <h4>{setName}</h4>
-                      {rows.map(renderRarityRow)}
+                      {set.rarities.map((r: CardSetRarity) =>
+                        renderRarityRow({
+                          id: selectedCard.id,
+                          setCode: set.setCode,
+                          rarity: r.rarity,
+                          collectionAmount: r.collectionAmount,
+                          setPrice: r.setPrice
+                        })
+                      )}
                     </div>
-                  ));
-                })()}
+                  ))}
               </div>
             </>
           )}
