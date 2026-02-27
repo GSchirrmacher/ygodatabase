@@ -29,22 +29,22 @@ struct CardSet {
 struct Card {
     id: i64,
     name: String,
-    card_type: String,
-    has_alt_art: i64,
-    img_path: Option<String>,
-    image_id: Option<i64>,
-
+    typeline: Option<Vec<String>>,
     frame_type: Option<String>,
-    attribute: Option<String>,
     desc: Option<String>,
 
-    level: Option<i64>,
     atk: Option<i64>,
     def: Option<i64>,
-    race: Option<String>,
+    level: Option<i64>,
     scale: Option<i64>,
     linkval: Option<i64>,
-    typeline: Option<Vec<String>>,
+    race: Option<String>,
+    attribute: Option<String>,
+
+    has_alt_art: i64,
+    card_type: String,
+    img_path: Option<String>,
+    image_id: Option<i64>,
 
     sets: Vec<CardSet>,
 }
@@ -149,6 +149,7 @@ fn load_cards_with_images(
         WHERE (:name IS NULL OR c.name LIKE :name)
         AND (:card_type IS NULL OR c.type = :card_type)
         AND (:set IS NULL OR cs.set_name = :set)
+        ORDER BY c.name
     ";
 
 
@@ -196,62 +197,58 @@ fn load_cards_with_images(
         raw_rows.push(r.map_err(|e| e.to_string())?);
     }
 
-    let grouped_mode = set.is_none();
-
     let mut map: HashMap<i64, Card> = HashMap::new();
 
-for r in raw_rows {
+    for r in raw_rows {
 
-    let card = map.entry(r.id).or_insert_with(|| Card {
-        id: r.id,
-        name: r.name.clone(),
-        card_type: r.card_type.clone(),
-        has_alt_art: r.has_alt_art,
-        img_path: normalize_img_path(r.img_path.clone()),
-        image_id: r.image_id,
+        let card = map.entry(r.id).or_insert_with(|| Card {
+            id: r.id,
+            name: r.name.clone(),
+            card_type: r.card_type.clone(),
+            has_alt_art: r.has_alt_art,
+            img_path: normalize_img_path(r.img_path.clone()),
+            image_id: r.image_id,
 
-        frame_type: r.frame_type.clone(),
-        attribute: r.attribute.clone(),
-        desc: r.desc.clone(),
+            frame_type: r.frame_type.clone(),
+            attribute: r.attribute.clone(),
+            desc: r.desc.clone(),
 
-        level: r.level,
-        atk: r.atk,
-        def: r.def,
-        race: r.race.clone(),
-        scale: r.scale,
-        linkval: r.linkval,
-        typeline: r.typeline.clone(),
+            level: r.level,
+            atk: r.atk,
+            def: r.def,
+            race: r.race.clone(),
+            scale: r.scale,
+            linkval: r.linkval,
+            typeline: r.typeline.clone(),
 
-        sets: Vec::new(),
-    });
-
-    if let Some(set_code) = &r.set_code {
-
-        let set_index = card
-            .sets
-            .iter()
-            .position(|s| s.set_code.as_ref() == Some(set_code));
-
-        let set_ref = if let Some(i) = set_index {
-            &mut card.sets[i]
-        } else {
-            card.sets.push(CardSet {
-                set_code: r.set_code.clone(),
-                set_name: r.set_name.clone(),
-                rarities: Vec::new(),
-            });
-            card.sets.last_mut().unwrap()
-        };
-
-        set_ref.rarities.push(CardSetRarity {
-            rarity: r.set_rarity.clone(),
-            collection_amount: r.collection_amount,
-            set_price: r.set_price,
+            sets: vec![],
         });
-    }
-}
 
-Ok(map.into_values().collect())
+        let set_code = r.set_code.clone();
+        if let Some(existing_set) = card
+                .sets
+                .iter_mut()
+                .find(|s| s.set_code == set_code)
+            {
+                existing_set.rarities.push(CardSetRarity {
+                    rarity: r.set_rarity.clone(),
+                    collection_amount: r.collection_amount,
+                    set_price: r.set_price,
+                });
+            } else {
+                card.sets.push(CardSet {
+                    set_code: r.set_code.clone(),
+                    set_name: r.set_name.clone(),
+                    rarities: vec![CardSetRarity {
+                        rarity: r.set_rarity.clone(),
+                        collection_amount: r.collection_amount,
+                        set_price: r.set_price,
+                    }],
+                });
+            }
+        }
+    let result: Vec<Card> = map.into_values().collect();
+    Ok(result)
 }
 
 

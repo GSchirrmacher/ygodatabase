@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { List } from "react-window";
+import { Grid } from "react-window";
 import { useRef } from "react";
 import "./App.css";
 
@@ -232,7 +232,17 @@ export default function App() {
     trap: "#c04c9b",
   };
 
-  const groupedCards = cards;
+  const imageCache = new Set<string>();
+
+  function preload(src?: string) {
+    if (!src || imageCache.has(src)) return;
+
+    const img = new Image();
+    img.src = src;
+    img.decoding = "async";
+
+    imageCache.add(src);
+  }
   
   function getFrameBackground(frameType?: string) {
     if (!frameType) return "#ccc";
@@ -361,6 +371,25 @@ export default function App() {
     );
   }
 
+  function renderSetSection(card: Card) {
+    if (!card.sets || card.sets.length === 0) return null;
+
+    return card.sets.map((set: CardSet) => (
+      <div key={set.setCode ?? "unknown"} style={{ marginBottom: 12 }}>
+        <h4>{set.setName ?? set.setCode ?? "Unknown Set"}</h4>
+
+        {set.rarities.map((r: CardSetRarity) =>
+          renderRarityRow({
+            id: card.id,
+            setCode: set.setCode,
+            setRarity: r.rarity,
+            collectionAmount: r.collectionAmount,
+            setPrice: r.setPrice
+          })
+        )}
+      </div>
+    ));
+  }
 
   // Load sets + initial cards
   useEffect(() => {
@@ -420,107 +449,70 @@ export default function App() {
         >
           {gridWidth > 0 && (() => {
             const CARD_WIDTH = 140;
-            const CARD_HEIGHT = 200;
+            const CARD_HEIGHT = 210;
+
             const columnCount = Math.max(1, Math.floor(gridWidth / CARD_WIDTH));
-            const rowCount = Math.ceil(groupedCards.length / columnCount);
+            const rowCount = Math.ceil(cards.length / columnCount);
 
             return (
-              <List
-                style={{ height: "100%", width: gridWidth }}
+              <Grid
+                columnCount={columnCount}
+                columnWidth={CARD_WIDTH}
                 rowCount={rowCount}
                 rowHeight={CARD_HEIGHT}
-                rowProps={{}}
-                rowComponent={({ index, style }) => {
-                  const start = index * columnCount;
-                  const rowCards = groupedCards.slice(start, start + columnCount);
+                style={{
+                  height: window.innerHeight - 180,
+                  width: gridWidth,
+                }}
+                cellProps={{}}
+                cellComponent={({ columnIndex, rowIndex, style, ariaAttributes }) => {
+                  const index = rowIndex * columnCount + columnIndex;
+                  const c = cards[index];
+
+                  if (!c) return null;
+
+                  const src = c.imgPath?.replace("asset://", "/");
+
+                  preload(src);
 
                   return (
-                    <div
-                      style={{
-                        ...style,
-                        display: "flex",
-                        gap: 10,
-                        padding: 5,
-                      }}
-                    >
-                      {rowCards.map((c) => {
-                        const firstRarity = c.sets?.[0]?.rarities?.[0]?.rarity;
-                        const group = getRarityGroup(firstRarity);
-                        const rarityColor =
-                          selectedCard?.id === c.id
-                            ? "#4caf50"
-                            : group
-                            ? rarityGroupColors[group]
-                            : "#ccc";
+                    <div style={style} {...ariaAttributes}>
+                      <img
+                        src={src}
+                        width={120}
+                        loading="lazy"
+                        decoding="async"
+                        style={{
+                        display: "block",
+                            borderRadius: 6,
+                            contentVisibility: "auto",
+                        }}
+                        
+                      />
+                      {/* Rarity Icon */}
+                        {c.sets?.[0]?.rarities?.length > 0 && (() => {
+                          const primary =
+                            getRarityGroup(
+                              c.sets[0].rarities[0].rarity
+                            );
 
-                        return (
-                          <div
-                            key={`${c.id}-${c.imageId ?? "base"}`}
-                            style={{
-                              position: "relative",
-                              cursor: "pointer",
-                              border: `2px solid ${rarityColor}`,
-                              borderRadius: 8,
-                              transition: "all 0.15s ease",
-                            }}
-                            onClick={() => setSelectedCard(c)}
-                          >
+                          const icon = rarityGroupIcons[primary];
+
+                          return icon ? (
                             <img
-                              src={c.imgPath?.replace("asset://", "/")}
-                              width={120}
+                              src={icon}
+                              width={24}
                               style={{
-                                display: "block",
+                                position: "absolute",
+                                bottom: 6,
+                                right: 6,
+                                background: "rgba(0,0,0,0.6)",
+                                padding: 3,
                                 borderRadius: 6,
                               }}
                             />
-
-                            {/* RARITY ICON OVERLAY */}
-                            {c.sets?.[0]?.rarities?.length > 0 && (() => {
-                              const primary = c.sets[0].rarities[0].rarity;
-                              const primaryGroup = getRarityGroup(primary);
-                              const primaryIcon = rarityGroupIcons[primaryGroup];
-
-                              const additionalCount = c.sets[0].rarities.length - 1;
-
-                              return (
-                                <>
-                                  {primaryIcon && (
-                                    <img
-                                      src={primaryIcon}
-                                      width={24}
-                                      style={{
-                                        position: "absolute",
-                                        bottom: 6,
-                                        right: 36,
-                                        background: "rgba(0,0,0,0.6)",
-                                        padding: 3,
-                                        borderRadius: 6,
-                                      }}
-                                    />
-                                  )}
-
-                                  {additionalCount > 0 && (
-                                    <div
-                                      style={{
-                                        position: "absolute",
-                                        bottom: 6,
-                                        right: 6,
-                                        background: "rgba(0,0,0,0.75)",
-                                        color: "white",
-                                        fontSize: 12,
-                                        padding: "2px 6px",
-                                        borderRadius: 6,
-                                      }}
-                                    >
-                                      +{additionalCount}
-                                    </div>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </div>
-                        );
-                      })}
+                          ) : null;
+                        })()}
                     </div>
                   );
                 }}
@@ -597,21 +589,7 @@ export default function App() {
 
               {/* SET / RARITY SECTION */}
               <div style={{ marginTop: 20 }}>
-                  {selectedCard && selectedCard.sets.map((set: CardSet) => (
-                    <div key={set.setCode ?? "unknown"} style={{ marginBottom: 12 }}>
-                      <h4>{set.setName ?? set.setCode}</h4>
-
-                      {set.rarities.map((r: CardSetRarity) =>
-                        renderRarityRow({
-                          id: selectedCard.id,
-                          setCode: set.setCode,
-                          rarity: r.rarity,
-                          collectionAmount: r.collectionAmount,
-                          setPrice: r.setPrice
-                        })
-                      )}
-                    </div>
-                  ))}
+                {selectedCard && renderSetSection(selectedCard)}
               </div>
             </>
           )}
