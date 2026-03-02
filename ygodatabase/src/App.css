@@ -113,7 +113,4 @@ button {
   button:active {
     background-color: #0f0f0f69;
   }
-  img {
-    will-change: transform;
-  }
 }
