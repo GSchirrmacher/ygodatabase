@@ -1,13 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { List } from "react-window";
-import { useRef } from "react";
 import "./App.css";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
 interface CardStub {
   id: number;
   name: string;
@@ -18,6 +16,7 @@ interface CardStub {
   frameType?: string;
   // Flat list of all rarity strings across all sets (used for border/icon only)
   rarities: (string | null)[];
+  totalCollectionAmount: number;
 }
 
 interface CardSetRarity {
@@ -141,7 +140,7 @@ const rarityGroupIcons: Record<string, string> = {
   secret_rare:                  "/rarities/secret_rare.png",
   shatterfoil:                  "/rarities/shatterfoil.png",
   special:                      "/rarities/special.png",
-  starfoil:                     "/rarities/starfoil.png",
+  starfoil:                     "/rarities/starfoil_rare.png",
   starlight_rare:               "/rarities/starlight_rare.png",
   super_parallel_rare:          "/rarities/super_parallel_rare.png",
   super_rare:                   "/rarities/super_rare.png",
@@ -164,7 +163,7 @@ const FRAME_COLORS: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// Pure helpers
+// Helpers
 // ---------------------------------------------------------------------------
 function getRarityGroup(rarity?: string | null): string {
   if (!rarity) return "unknown";
@@ -204,8 +203,10 @@ export default function App() {
   const [cards, setCards] = useState<CardStub[]>([]);
   const [sets, setSets] = useState<string[]>([]);
   const [selectedSet, setSelectedSet] = useState<string>("ALL");
+  const [searchInput, setSearchInput] = useState<string>("");
   const [search, setSearch] = useState<string>("");
   const [selectedCard, setSelectedCard] = useState<CardDetail | null>(null);
+  const [collectionOnly, setCollectionOnly] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState(0);
@@ -214,6 +215,12 @@ export default function App() {
   useEffect(() => {
     invoke<string[]>("get_all_sets").then(setSets);
   }, []);
+
+  // Debounce: only commit the search string to state 300ms after the user stops typing,
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   // Reload stubs whenever filters change
   useEffect(() => {
@@ -233,7 +240,7 @@ export default function App() {
   }, []);
 
   // Fetch full detail when a grid card is clicked
-  async function handleCardClick(stub: CardStub) {
+  const handleCardClick = useCallback(async (stub: CardStub) => {
     setDetailLoading(true);
     try {
       const detail = await invoke<CardDetail>("load_card_detail", { cardId: stub.id });
@@ -241,22 +248,31 @@ export default function App() {
     } finally {
       setDetailLoading(false);
     }
-  }
+  }, []);
 
-  async function updateCollection(row: {
-    id: number;
-    setCode?: string;
-    rarity?: string;
-    collectionAmount?: number;
-  }, delta: number) {
+  async function updateCollection(
+    e: React.MouseEvent,
+    row: {
+      id: number;
+      setCode?: string;
+      rarity?: string;
+      collectionAmount?: number;
+    }, delta: number) {
+    e.preventDefault();
+    e.stopPropagation();
     const newValue = Math.max(0, (row.collectionAmount ?? 0) + delta);
 
-    await invoke("update_collection_amount", {
-      cardId: row.id,
-      setCode: row.setCode,
-      rarity: row.rarity,
-      amount: newValue,
-    });
+    try {
+      await invoke("update_collection_amount", {
+        cardId: row.id,
+        setCode: row.setCode,
+        rarity: row.rarity,
+        amount: newValue,
+      });
+    } catch (err) {
+      console.error("Failed to update collection amount:", err);
+      return;
+    }
 
     // Update the detail pane immutably
     setSelectedCard((prev) => {
@@ -350,12 +366,26 @@ export default function App() {
       <div key={`${r.id}-${r.setCode}-${r.rarity}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {icon && <img src={icon} style={{ height: 20 }} />}
         <span>{r.collectionAmount ?? 0}</span>
-        <button onClick={() => updateCollection(r, 1)}>+</button>
-        <button onClick={() => updateCollection(r, -1)} disabled={(r.collectionAmount ?? 0) <= 0}>-</button>
+        <button onClick={(e) => updateCollection(e, r, 1)}>+</button>
+        <button onClick={(e) => updateCollection(e, r, -1)} disabled={(r.collectionAmount ?? 0) <= 0}>-</button>
         <span>{r.setPrice ?? "–"}</span>
       </div>
     );
   }
+
+  const displayedCards = collectionOnly
+    ? cards.filter((c) => c.totalCollectionAmount > 0)
+    : cards;
+  // Memoize detail-pane derived values — these only need recomputing when selectedCard changes,
+  // not on every render triggered by e.g. grid hover or loading state changes
+  const detailFrameBackground = useMemo(
+    () => getFrameBackground(selectedCard?.frameType),
+    [selectedCard?.frameType]
+  );
+  const detailTypeline = useMemo(
+    () => (selectedCard ? formatTypeline(selectedCard) : ""),
+    [selectedCard]
+  );
 
   return (
     <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
@@ -365,13 +395,23 @@ export default function App() {
         {sets.map((s) => <option key={s} value={s}>{s}</option>)}
       </select>
 
-      <input
-        style={{ marginLeft: 10 }}
-        type="text"
-        placeholder="Search name..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <input
+          type="text"
+          placeholder="Search name..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+        />
+        <button
+          onClick={() => setCollectionOnly((v) => !v)}
+          style={{
+            background: collectionOnly ? "#4caf50" : undefined,
+            color: collectionOnly ? "#fff" : undefined,
+          }}
+        >
+          {collectionOnly ? "My Collection ✓" : "My Collection"}
+        </button>
+      </div>
 
       <div style={{ display: "flex", flexDirection: "row", gap: 20, minWidth: 20 }}>
 
@@ -382,7 +422,7 @@ export default function App() {
         >
           {gridWidth > 0 && (() => {
             const CARD_WIDTH = 140;
-            const CARD_HEIGHT = 200;
+            const CARD_HEIGHT = 180;
             const columnCount = Math.max(1, Math.floor(gridWidth / CARD_WIDTH));
             const rowCount = Math.ceil(cards.length / columnCount);
 
@@ -394,7 +434,7 @@ export default function App() {
                 rowProps={{} as never}
                 rowComponent={({ index, style }: { index: number; style: React.CSSProperties }) => {
                   const start = index * columnCount;
-                  const rowCards = cards.slice(start, start + columnCount);
+                  const rowCards = displayedCards.slice(start, start + columnCount);
 
                   return (
                     <div style={{ ...style, display: "flex", gap: 10, padding: 5 }}>
@@ -523,12 +563,12 @@ export default function App() {
                   marginTop: 15,
                   padding: 8,
                   borderRadius: 4,
-                  background: getFrameBackground(selectedCard.frameType),
+                  background: detailFrameBackground,
                   textAlign: "center",
                   fontWeight: "bold",
                 }}
               >
-                {formatTypeline(selectedCard)}
+                {detailTypeline}
               </div>
 
               {/* DESCRIPTION */}
