@@ -388,7 +388,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20, height: "100vh", overflow: "hidden", boxSizing: "border-box" }}>
       {/* Filters */}
       <select value={selectedSet} onChange={(e) => setSelectedSet(e.target.value)}>
         <option value="ALL">All Sets</option>
@@ -413,12 +413,12 @@ export default function App() {
         </button>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "row", gap: 20, minWidth: 20 }}>
+      <div style={{ display: "flex", flexDirection: "row", gap: 20, minWidth: 20, flex: 1, minHeight: 0 }}>
 
         {/* LEFT: CARD GRID */}
         <div
           ref={gridRef}
-          style={{ flex: 3, minWidth: 0, height: "calc(100vh - 180px)", overflow: "hidden" }}
+          style={{ flex: 3, minWidth: 0, height: "100%", overflow: "hidden" }}
         >
           {gridWidth > 0 && (() => {
             const CARD_WIDTH = 140;
@@ -502,6 +502,24 @@ export default function App() {
                                 +{additionalCount}
                               </div>
                             )}
+
+                            {c.totalCollectionAmount > 0 && (
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: 6,
+                                  left: 6,
+                                  background: "rgba(76,175,80,0.9)",
+                                  color: "white",
+                                  fontSize: 12,
+                                  fontWeight: "bold",
+                                  padding: "2px 6px",
+                                  borderRadius: 6,
+                                }}
+                              >
+                                {c.totalCollectionAmount}×
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -522,6 +540,8 @@ export default function App() {
             border: "1px solid #ccc",
             borderRadius: 8,
             overflow: "auto",
+            height: "100%",
+            boxSizing: "border-box",
           }}
         >
           {!selectedCard && !detailLoading && <p>Select a card</p>}

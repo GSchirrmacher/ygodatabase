@@ -6,7 +6,6 @@ use rusqlite::named_params;
 
 
 // TODO : Fix alternate Rares in Sets showing up while there are none (needs to be fixed in database since it is nowhere stated there)
-// TODO : Add collection view
 // TODO : Add prices/pricing of collection
 
 // ---------------------------------------------------------------------------
@@ -267,7 +266,7 @@ fn load_card_stubs(
 /// Returns the full detail for a single card by ID, including all stats and sets.
 /// Called only when the user clicks a card in the grid.
 #[tauri::command]
-fn load_card_detail(card_id: i64) -> Result<CardDetail, String> {
+fn load_card_detail(card_id: i64, set_name: Option<String>) -> Result<CardDetail, String> {
     let conn = open_db()?;
 
     let sql = "
@@ -297,12 +296,13 @@ fn load_card_detail(card_id: i64) -> Result<CardDetail, String> {
         LEFT JOIN card_images ci ON c.id = ci.card_id
         LEFT JOIN card_sets cs ON c.id = cs.card_id
         WHERE c.id = :card_id
+          AND (:set_name IS NULL OR cs.set_name = :set_name)
     ";
 
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map(named_params! { ":card_id": card_id }, |row| {
+        .query_map(named_params! { ":card_id": card_id, ":set_name": set_name }, |row| {
             Ok(RawDetailRow {
                 id: row.get("id")?,
                 name: row.get("name")?,
