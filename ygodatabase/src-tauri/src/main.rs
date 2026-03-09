@@ -11,6 +11,11 @@ use commands::collection::{
     update_collection_amount,
 };
 
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|_app| {
@@ -25,6 +30,7 @@ fn main() {
             load_card_detail,
             get_all_sets,
             update_collection_amount,
+            exit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error running app");
