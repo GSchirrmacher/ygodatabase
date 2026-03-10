@@ -5,7 +5,7 @@ Done:
 - showing images -> bugged again
 - show card informations
 - menus
-- - collection manager
+- collection manager
 
 TODO:
 - deckbuilder for current tcg format
