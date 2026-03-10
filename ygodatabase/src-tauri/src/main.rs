@@ -10,6 +10,7 @@ use commands::collection::{
     load_card_stubs,
     update_collection_amount,
 };
+use commands::deck::get_ban_list;
 
 #[tauri::command]
 fn exit_app(app: tauri::AppHandle) {
@@ -30,6 +31,7 @@ fn main() {
             load_card_detail,
             get_all_sets,
             update_collection_amount,
+            get_ban_list,
             exit_app,
         ])
         .run(tauri::generate_context!())
