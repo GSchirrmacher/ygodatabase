@@ -4,10 +4,10 @@ Done:
 - Database entries (from ygoprodeck API)
 - showing images -> bugged again
 - show card informations
-
-TODO:
 - menus
 - collection manager
+
+TODO:
 - deckbuilder for current tcg format
 - deckbuilder for genesys format
 - deckbuilder various other formats
