@@ -43,7 +43,7 @@ interface DeckStub {
 
 type DeckTarget = "main" | "side";
 
-interface DeckBuilderProps {
+interface DeckbuilderProps {
   onBack: () => void;
 }
 
@@ -79,7 +79,7 @@ function stubToDeckEntry(s: DeckStub): DeckEntry {
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
-export default function DeckBuilder({ onBack }: DeckBuilderProps) {
+export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   // ── Card browser ─────────────────────────────────────────────────────────
   const [cards, setCards] = useState<CardStub[]>([]);
   const [searchInput, setSearchInput] = useState("");
@@ -93,6 +93,7 @@ export default function DeckBuilder({ onBack }: DeckBuilderProps) {
   const [deck, setDeck] = useState<Deck>({ main: [], extra: [], side: [] });
   const [deckTarget, setDeckTarget] = useState<DeckTarget>("main");
   const [banList, setBanList] = useState<BanList>({ forbidden: [], limited: [], semiLimited: [] });
+  const [banFormat, setBanFormat] = useState<"tcg" | "ocg" | "goat">("tcg");
   const [collapsed, setCollapsed] = useState({ main: false, extra: false, side: false });
 
   // ── Save / load ───────────────────────────────────────────────────────────
@@ -103,11 +104,27 @@ export default function DeckBuilder({ onBack }: DeckBuilderProps) {
   // ── Drag ─────────────────────────────────────────────────────────────────
   const dragStub = useRef<CardStub | null>(null);
 
-  // ── Bootstrap ────────────────────────────────────────────────────────────
-  useEffect(() => {
+  // ── Bootstrap + format switch ────────────────────────────────────────────
+  // Syncs banlist.json from the DB for the active format, then reloads it.
+  async function syncAndReload(fmt: "tcg" | "ocg" | "goat") {
+    try {
+      await invoke("sync_banlist_from_db", { format: fmt });
+    } catch (err) {
+      console.error("Ban list sync failed:", err);
+    }
     invoke<BanList>("get_ban_list").then(setBanList).catch(() => {});
+  }
+
+  useEffect(() => {
+    syncAndReload(banFormat);
     refreshDeckList();
   }, []);
+
+  // Re-sync whenever the user switches format
+  useEffect(() => {
+    syncAndReload(banFormat);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [banFormat]);
 
   function refreshDeckList() {
     invoke<string[]>("list_decks").then(setDeckList).catch(() => {});
@@ -449,6 +466,16 @@ export default function DeckBuilder({ onBack }: DeckBuilderProps) {
         .deck-tab.active { background:rgba(212,175,55,0.12); border-color:rgba(212,175,55,0.6); color:#f0d060; }
         .deck-tab:hover:not(.active) { border-color:rgba(212,175,55,0.4); color:rgba(200,150,40,0.75); }
 
+        .ban-format-tabs { display:flex; gap:4px; }
+        .ban-tab {
+          padding:5px 12px; border-radius:2px; border:1px solid rgba(100,160,220,0.25);
+          background:transparent; color:rgba(100,160,220,0.5); cursor:pointer;
+          font-family:'Cinzel',serif; font-size:11px; font-weight:600;
+          letter-spacing:0.15em; text-transform:uppercase; transition:all 0.15s;
+        }
+        .ban-tab.active { background:rgba(100,160,220,0.12); border-color:rgba(100,160,220,0.6); color:#8aadee; }
+        .ban-tab:hover:not(.active) { border-color:rgba(100,160,220,0.4); color:rgba(100,160,220,0.75); }
+
         /* ── Deck panel ── */
         .deck-panel {
           flex:2; min-width:0; border:1px solid #333; border-radius:8px;
@@ -546,8 +573,19 @@ export default function DeckBuilder({ onBack }: DeckBuilderProps) {
             </button>
           </div>
 
-          {/* Target tabs + search — pushed to the far right */}
+          {/* Target tabs + ban format + search — pushed to the far right */}
           <div className="db-topbar-filters">
+            <div className="ban-format-tabs">
+              {(["tcg", "ocg", "goat"] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  className={`ban-tab ${banFormat === fmt ? "active" : ""}`}
+                  onClick={() => setBanFormat(fmt)}
+                >
+                  {fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
             <div className="deck-target-tabs">
               <button className={`deck-tab ${deckTarget === "main" ? "active" : ""}`} onClick={() => setDeckTarget("main")}>Main</button>
               <button className={`deck-tab ${deckTarget === "side" ? "active" : ""}`} onClick={() => setDeckTarget("side")}>Side</button>

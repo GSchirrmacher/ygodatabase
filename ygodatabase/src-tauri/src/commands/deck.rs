@@ -4,6 +4,14 @@ use std::fs;
 
 use crate::db::{get_db_path, normalize_img_path, open_db};
 
+// Raw shape of the banlist_info JSON column
+#[derive(Deserialize)]
+struct BanlistInfo {
+    ban_tcg:  Option<String>,
+    ban_ocg:  Option<String>,
+    ban_goat: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -176,6 +184,71 @@ pub fn delete_deck(name: String) -> Result<(), String> {
     if path.exists() {
         fs::remove_file(&path).map_err(|e| e.to_string())?;
     }
+    Ok(())
+}
+
+/// Reads `banlist_info` from every card in the DB, extracts the status for the
+/// requested format ("tcg", "ocg", or "goat"), and overwrites `banlist.json`.
+///
+/// Rows with a NULL or unparseable `banlist_info` are silently skipped (the card
+/// is unrestricted and doesn't need to appear in the file).
+#[tauri::command]
+pub fn sync_banlist_from_db(format: String) -> Result<(), String> {
+    let conn = open_db()?;
+
+    let mut stmt = conn
+        .prepare("SELECT id, banlist_info FROM cards WHERE banlist_info IS NOT NULL")
+        .map_err(|e| e.to_string())?;
+
+    let mut ban = BanList::default();
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+
+    for row in rows {
+        let (id, json_str) = row.map_err(|e| e.to_string())?;
+
+        // Skip rows whose banlist_info isn't valid JSON — don't abort the whole sync
+        let info: BanlistInfo = match serde_json::from_str(&json_str) {
+            Ok(v)  => v,
+            Err(_) => continue,
+        };
+
+        // Pick the relevant field based on the requested format
+        let status: Option<&str> = match format.to_lowercase().as_str() {
+            "tcg"  => info.ban_tcg.as_deref(),
+            "ocg"  => info.ban_ocg.as_deref(),
+            "goat" => info.ban_goat.as_deref(),
+            other  => return Err(format!("Unknown format '{}'. Use tcg, ocg, or goat.", other)),
+        };
+
+        match status {
+            Some(s) if s.eq_ignore_ascii_case("Forbidden")    => ban.forbidden.push(id),
+            Some(s) if s.eq_ignore_ascii_case("Limited")      => ban.limited.push(id),
+            Some(s) if s.eq_ignore_ascii_case("Semi-Limited") => ban.semi_limited.push(id),
+            _ => {} // unrestricted or absent — not included in banlist.json
+        }
+    }
+
+    // Sort for deterministic output
+    ban.forbidden.sort();
+    ban.limited.sort();
+    ban.semi_limited.sort();
+
+    // Write banlist.json next to cards.db
+    let mut path = get_db_path();
+    path.pop();
+    path.push("banlist.json");
+
+    let json = serde_json::to_string_pretty(&ban).map_err(|e| e.to_string())?;
+    fs::write(&path, json).map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
