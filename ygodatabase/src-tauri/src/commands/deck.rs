@@ -7,15 +7,14 @@ use crate::db::{get_db_path, normalize_img_path, open_db};
 // Raw shape of the banlist_info JSON column
 #[derive(Deserialize)]
 struct BanlistInfo {
-    ban_tcg:  Option<String>,
-    ban_ocg:  Option<String>,
+    ban_tcg: Option<String>,
+    ban_ocg: Option<String>,
     ban_goat: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
 #[derive(Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct BanList {
@@ -49,7 +48,6 @@ pub struct DeckStub {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
 fn decks_dir() -> std::path::PathBuf {
     let mut path = get_db_path();
     path.pop();           // remove cards.db → ressources/
@@ -88,9 +86,9 @@ fn fetch_stubs_by_ids(ids: &[i64]) -> Result<HashMap<i64, DeckStub>, String> {
     let rows = stmt
         .query_map(params.as_slice(), |row| {
             Ok(DeckStub {
-                id:         row.get(0)?,
-                name:       row.get(1)?,
-                img_path:   row.get(2)?,
+                id: row.get(0)?,
+                name: row.get(1)?,
+                img_path: row.get(2)?,
                 frame_type: row.get(3).ok(),
             })
         })
@@ -222,15 +220,15 @@ pub fn sync_banlist_from_db(format: String) -> Result<(), String> {
 
         // Pick the relevant field based on the requested format
         let status: Option<&str> = match format.to_lowercase().as_str() {
-            "tcg"  => info.ban_tcg.as_deref(),
-            "ocg"  => info.ban_ocg.as_deref(),
+            "tcg" => info.ban_tcg.as_deref(),
+            "ocg" => info.ban_ocg.as_deref(),
             "goat" => info.ban_goat.as_deref(),
             other  => return Err(format!("Unknown format '{}'. Use tcg, ocg, or goat.", other)),
         };
 
         match status {
-            Some(s) if s.eq_ignore_ascii_case("Forbidden")    => ban.forbidden.push(id),
-            Some(s) if s.eq_ignore_ascii_case("Limited")      => ban.limited.push(id),
+            Some(s) if s.eq_ignore_ascii_case("Forbidden") => ban.forbidden.push(id),
+            Some(s) if s.eq_ignore_ascii_case("Limited") => ban.limited.push(id),
             Some(s) if s.eq_ignore_ascii_case("Semi-Limited") => ban.semi_limited.push(id),
             _ => {} // unrestricted or absent — not included in banlist.json
         }

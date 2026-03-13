@@ -1,6 +1,25 @@
 import { rarityGroups } from "../constants/rarity";
 import { FRAME_COLORS } from "../constants/frames";
 import type { CardDetail } from "../types/cards";
+import type { CardFilters } from "../types/filters";
+
+/** Converts a CardFilters object into the params record expected by load_card_stubs. */
+export function filtersToParams(f: CardFilters): Record<string, string | number> {
+  const p: Record<string, string | number> = {};
+  if (f.name.trim())   p.name      = f.name.trim();
+  // category is the broad bucket; frameType is the specific subcategory
+  // the backend handles the IN-clause expansion for "monster"
+  if (f.category) p.category = f.category;
+  if (f.frameType) p.frameType = f.frameType;
+  if (f.attribute) p.attribute = f.attribute;
+  if (f.race) p.race = f.race;
+  if (f.level.trim()) p.level = parseInt(f.level, 10);
+  if (f.scale.trim()) p.scale = parseInt(f.scale, 10);
+  if (f.atk.trim()) p.atk = parseInt(f.atk, 10);
+  if (f.def.trim()) p.def = parseInt(f.def, 10);
+  if (f.banStatus) p.banStatus = f.banStatus;
+  return p;
+}
 
 export function getRarityGroup(rarity?: string | null): string {
   if (!rarity) return "unknown";

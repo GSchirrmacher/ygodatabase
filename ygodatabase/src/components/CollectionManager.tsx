@@ -285,7 +285,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
 
         {/* ── MAIN CONTENT: grid + detail pane ── */}
         <div style={{ display: "flex", flexDirection: "row", gap: 20, padding: "16px 20px", flex: 1, minHeight: 0 }}>
-          {/* LEFT: CARD DETAILS */}
+          {/* RIGHT: CARD DETAILS */}
           <div style={{
             flex: 2, minWidth: 0, padding: 20,
             border: "1px solid #ccc", borderRadius: 8,
@@ -336,8 +336,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
               </>
             )}
           </div>
-
-          {/* RIGHT: CARD GRID */}
+          {/* LEFT: CARD GRID */}
           <div ref={gridRef} style={{ flex: 3, minWidth: 0, height: "100%", overflow: "hidden" }}>
             {gridWidth > 0 && (() => {
               const columnCount = Math.max(1, Math.floor(gridWidth / CARD_WIDTH));

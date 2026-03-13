@@ -3,7 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { List } from "react-window";
 
 import type { CardStub, CardDetail } from "../types/cards";
-import { getFrameBackground, formatTypeline } from "../utils/cardUtils";
+import { getFrameBackground, formatTypeline, filtersToParams } from "../utils/cardUtils";
+import CardFiltersBar from "./CardFilters";
+import type { CardFilters } from "../types/filters";
+import { EMPTY_FILTERS } from "../types/filters";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -84,8 +87,10 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   const [cards, setCards] = useState<CardStub[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<CardFilters>(EMPTY_FILTERS);
   const [selectedCard, setSelectedCard] = useState<CardDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [cardLoading, setCardLoading] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState(0);
 
@@ -140,12 +145,12 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   const latestReq = useRef(0);
   useEffect(() => {
     const reqId = ++latestReq.current;
-    const params: Record<string, string> = {};
-    if (search.trim()) params.name = search;
+    setCardLoading(true);
+    const params = filtersToParams({ ...filters, name: search });
     invoke<CardStub[]>("load_card_stubs", params).then((r) => {
-      if (reqId === latestReq.current) setCards(r);
-    });
-  }, [search]);
+      if (reqId === latestReq.current) { setCards(r); setCardLoading(false); }
+    }).catch(() => setCardLoading(false));
+  }, [search, filters]);
 
   // ── Grid resize ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -598,6 +603,14 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
             />
           </div>
         </div>
+
+        {/* ── FILTER BAR ── */}
+        <CardFiltersBar
+          filters={filters}
+          onChange={(f) => setFilters(f)}
+          resultCount={cards.length}
+          loading={cardLoading}
+        />
 
         {/* ── MAIN CONTENT ── */}
         <div style={{ display:"flex", flexDirection:"row", gap:20, padding:"16px 20px", flex:1, minHeight:0 }}>
