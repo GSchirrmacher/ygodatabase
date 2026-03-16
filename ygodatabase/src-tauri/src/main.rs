@@ -12,6 +12,7 @@ use commands::collection::{
 };
 use commands::deck::{
     get_ban_list,
+    get_collection_amounts,
     sync_banlist_from_db,
     list_decks,
     save_deck,
@@ -39,6 +40,7 @@ fn main() {
             get_all_sets,
             update_collection_amount,
             get_ban_list,
+            get_collection_amounts,
             sync_banlist_from_db,
             list_decks,
             save_deck,

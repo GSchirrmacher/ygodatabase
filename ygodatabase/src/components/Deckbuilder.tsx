@@ -106,6 +106,11 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   const [deckName, setDeckName] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
 
+  // ── Collection comparison ─────────────────────────────────────────────────
+  // Map of card_id → total copies owned across the whole collection
+  const [collectionAmounts, setCollectionAmounts] = useState<Record<number, number>>({});
+  const [compareMode, setCompareMode] = useState(false);
+
   // ── Drag ─────────────────────────────────────────────────────────────────
   const dragStub = useRef<CardStub | null>(null);
 
@@ -123,6 +128,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   useEffect(() => {
     syncAndReload(banFormat);
     refreshDeckList();
+    invoke<Record<number, number>>("get_collection_amounts").then(setCollectionAmounts).catch(() => {});
   }, []);
 
   // Re-sync whenever the user switches format
@@ -338,6 +344,66 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     return <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{rows}</div>;
   }
 
+  // ── Copy / wants list ─────────────────────────────────────────────────────
+  function buildYdk(): string {
+    const lines = ["#created by Player", "#main"];
+    deck.main.forEach((e)  => lines.push(String(e.id)));
+    lines.push("#extra");
+    deck.extra.forEach((e) => lines.push(String(e.id)));
+    lines.push("!side");
+    deck.side.forEach((e)  => lines.push(String(e.id)));
+    return lines.join("\n");
+  }
+
+  const [copyYdkStatus,   setCopyYdkStatus]   = useState<"idle"|"ok"|"err">("idle");
+  const [copyWantsStatus, setCopyWantsStatus] = useState<"idle"|"ok"|"err">("idle");
+
+  async function handleCopyYdk() {
+    try {
+      await navigator.clipboard.writeText(buildYdk());
+      setCopyYdkStatus("ok");
+      setTimeout(() => setCopyYdkStatus("idle"), 2000);
+    } catch {
+      setCopyYdkStatus("err");
+      setTimeout(() => setCopyYdkStatus("idle"), 2000);
+    }
+  }
+
+  async function handleCopyWants() {
+    // Collect every unique card across all sections with its deck count
+    const allEntries = [...deck.main, ...deck.extra, ...deck.side];
+    const countMap = new Map<number, { name: string; count: number }>();
+    for (const e of allEntries) {
+      const cur = countMap.get(e.id);
+      if (cur) cur.count++;
+      else countMap.set(e.id, { name: e.name, count: 1 });
+    }
+
+    const lines: string[] = [];
+    for (const [id, { name, count }] of countMap) {
+      const owned   = collectionAmounts[id] ?? 0;
+      const missing = Math.max(0, count - owned);
+      if (missing > 0) lines.push(`${missing} ${name}`);
+    }
+
+    if (lines.length === 0) {
+      // Nothing missing — copy an empty list but still flash "ok"
+      await navigator.clipboard.writeText("").catch(() => {});
+      setCopyWantsStatus("ok");
+      setTimeout(() => setCopyWantsStatus("idle"), 2000);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopyWantsStatus("ok");
+      setTimeout(() => setCopyWantsStatus("idle"), 2000);
+    } catch {
+      setCopyWantsStatus("err");
+      setTimeout(() => setCopyWantsStatus("idle"), 2000);
+    }
+  }
+
   // ── Deck section renderer ─────────────────────────────────────────────────
   function renderDeckSection(label: string, section: keyof Deck, max: number) {
     const entries = deck[section];
@@ -358,22 +424,38 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
         </div>
         {!isCollapsed && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: "6px 4px" }}>
-            {grouped.map(({ entry, count }) => (
-              <div
-                key={entry.id}
-                className="deck-card-thumb"
-                title={`${entry.name}${count > 1 ? ` ×${count}` : ""} — right-click to remove`}
-                onContextMenu={(e) => { e.preventDefault(); removeOneFromSection(entry.id, section); }}
-              >
-                <img
-                  src={entry.imgPath?.replace("asset://", "/")}
-                  width={52}
-                  style={{ display: "block", borderRadius: 4 }}
-                  draggable={false}
-                />
-                {count > 1 && <div className="deck-card-count">×{count}</div>}
-              </div>
-            ))}
+            {grouped.map(({ entry, count }) => {
+              const owned   = collectionAmounts[entry.id] ?? 0;
+              const missing = compareMode ? Math.max(0, count - owned) : 0;
+              // badge: compare mode → "owned/inDeck", normal → "×N" when >1
+              const badgeText = compareMode
+                ? `${owned}/${count}`
+                : count > 1 ? `×${count}` : null;
+              // colour: red when missing any, green when fully covered, gold default
+              const badgeColor = compareMode
+                ? (missing > 0 ? "#e74c3c" : "#4caf50")
+                : "#f0d060";
+              return (
+                <div
+                  key={entry.id}
+                  className="deck-card-thumb"
+                  title={`${entry.name}${compareMode ? ` — owned: ${owned}, in deck: ${count}` : count > 1 ? ` ×${count}` : ""} — right-click to remove`}
+                  onContextMenu={(e) => { e.preventDefault(); removeOneFromSection(entry.id, section); }}
+                >
+                  <img
+                    src={entry.imgPath?.replace("asset://", "/")}
+                    width={52}
+                    style={{ display: "block", borderRadius: 4, opacity: compareMode && missing > 0 ? 0.65 : 1 }}
+                    draggable={false}
+                  />
+                  {badgeText && (
+                    <div className="deck-card-count" style={{ color: badgeColor }}>
+                      {badgeText}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -531,6 +613,53 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
           font-size:10px; font-weight:bold;
           padding:1px 5px; border-radius:3px; line-height:1.5;
         }
+
+        /* ── Deck panel footer ── */
+        .deck-panel-footer {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 10px 4px 4px;
+          border-top: 1px solid rgba(212,175,55,0.12);
+          margin-top: 8px;
+        }
+
+        .deck-panel-footer-row {
+          display: flex;
+          gap: 6px;
+        }
+
+        .dp-btn {
+          flex: 1;
+          padding: 6px 8px;
+          border-radius: 2px;
+          border: 1px solid;
+          cursor: pointer;
+          font-size: 10px;
+          font-family: 'Cinzel', serif;
+          font-weight: 600;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          transition: all 0.15s;
+          text-align: center;
+          white-space: nowrap;
+        }
+        .dp-btn-compare {
+          color: rgba(100,160,220,0.7);
+          border-color: rgba(100,160,220,0.25);
+          background: transparent;
+        }
+        .dp-btn-compare:hover        { color:#8aadee; border-color:rgba(100,160,220,0.55); background:rgba(100,160,220,0.07); }
+        .dp-btn-compare.active       { color:#8aadee; border-color:rgba(100,160,220,0.6); background:rgba(100,160,220,0.12); }
+
+        .dp-btn-copy {
+          color: rgba(200,150,40,0.65);
+          border-color: rgba(200,150,40,0.2);
+          background: transparent;
+        }
+        .dp-btn-copy:hover  { color:#f0d060; border-color:rgba(212,175,55,0.55); background:rgba(212,175,55,0.07); }
+        .dp-btn-copy.ok     { color:#4caf50; border-color:rgba(76,175,80,0.5);   background:rgba(76,175,80,0.08); }
+        .dp-btn-copy.err    { color:#e74c3c; border-color:rgba(231,76,60,0.5);   background:rgba(231,76,60,0.08); }
       `}</style>
 
       <div className="db-root">
@@ -713,6 +842,35 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
             {renderDeckSection("Main Deck",  "main",  60)}
             {renderDeckSection("Extra Deck", "extra", 15)}
             {renderDeckSection("Side Deck",  "side",  15)}
+
+            {/* ── Panel footer ── */}
+            <div className="deck-panel-footer">
+              {/* Compare toggle — full width */}
+              <button
+                className={`dp-btn dp-btn-compare ${compareMode ? "active" : ""}`}
+                onClick={() => setCompareMode((v) => !v)}
+              >
+                {compareMode ? "◉ Collection Compare" : "○ Collection Compare"}
+              </button>
+
+              {/* Copy row */}
+              <div className="deck-panel-footer-row">
+                <button
+                  className={`dp-btn dp-btn-copy ${copyYdkStatus === "ok" ? "ok" : copyYdkStatus === "err" ? "err" : ""}`}
+                  onClick={handleCopyYdk}
+                  disabled={deck.main.length + deck.extra.length + deck.side.length === 0}
+                >
+                  {copyYdkStatus === "ok" ? "Copied ✓" : copyYdkStatus === "err" ? "Failed ✕" : "Copy .ydk"}
+                </button>
+                <button
+                  className={`dp-btn dp-btn-copy ${copyWantsStatus === "ok" ? "ok" : copyWantsStatus === "err" ? "err" : ""}`}
+                  onClick={handleCopyWants}
+                  disabled={deck.main.length + deck.extra.length + deck.side.length === 0}
+                >
+                  {copyWantsStatus === "ok" ? "Copied ✓" : copyWantsStatus === "err" ? "Failed ✕" : "Wants List"}
+                </button>
+              </div>
+            </div>
           </div>
 
         </div>

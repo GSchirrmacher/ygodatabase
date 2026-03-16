@@ -7,8 +7,8 @@ use crate::db::{get_db_path, normalize_img_path, open_db};
 // Raw shape of the banlist_info JSON column
 #[derive(Deserialize)]
 struct BanlistInfo {
-    ban_tcg: Option<String>,
-    ban_ocg: Option<String>,
+    ban_tcg:  Option<String>,
+    ban_ocg:  Option<String>,
     ban_goat: Option<String>,
 }
 
@@ -86,9 +86,9 @@ fn fetch_stubs_by_ids(ids: &[i64]) -> Result<HashMap<i64, DeckStub>, String> {
     let rows = stmt
         .query_map(params.as_slice(), |row| {
             Ok(DeckStub {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                img_path: row.get(2)?,
+                id:         row.get(0)?,
+                name:       row.get(1)?,
+                img_path:   row.get(2)?,
                 frame_type: row.get(3).ok(),
             })
         })
@@ -113,7 +113,6 @@ fn resolve_ids(ids: &[i64], map: &HashMap<i64, DeckStub>) -> Vec<DeckStub> {
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
-
 /// Reads `ressources/banlist.json`. Returns empty BanList if file is missing.
 #[tauri::command]
 pub fn get_ban_list() -> Result<BanList, String> {
@@ -130,7 +129,33 @@ pub fn get_ban_list() -> Result<BanList, String> {
         .map_err(|e| format!("banlist.json parse error: {}", e))
 }
 
-/// Returns the names (without .ydk extension) of all saved decks, sorted alphabetically.
+/// Returns a map of card_id → total collection amount for every card that has
+/// at least 1 copy owned. Cards with 0 owned are omitted (treat missing as 0).
+#[tauri::command]
+pub fn get_collection_amounts() -> Result<std::collections::HashMap<i64, i64>, String> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT card_id, SUM(collection_amount) as total
+             FROM card_sets
+             WHERE collection_amount > 0
+             GROUP BY card_id",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))
+        .map_err(|e| e.to_string())?;
+
+    let mut map = std::collections::HashMap::new();
+    for r in rows {
+        let (id, total) = r.map_err(|e| e.to_string())?;
+        map.insert(id, total);
+    }
+    Ok(map)
+}
+
+
 #[tauri::command]
 pub fn list_decks() -> Result<Vec<String>, String> {
     let dir = decks_dir();
@@ -220,15 +245,15 @@ pub fn sync_banlist_from_db(format: String) -> Result<(), String> {
 
         // Pick the relevant field based on the requested format
         let status: Option<&str> = match format.to_lowercase().as_str() {
-            "tcg" => info.ban_tcg.as_deref(),
-            "ocg" => info.ban_ocg.as_deref(),
+            "tcg"  => info.ban_tcg.as_deref(),
+            "ocg"  => info.ban_ocg.as_deref(),
             "goat" => info.ban_goat.as_deref(),
             other  => return Err(format!("Unknown format '{}'. Use tcg, ocg, or goat.", other)),
         };
 
         match status {
-            Some(s) if s.eq_ignore_ascii_case("Forbidden") => ban.forbidden.push(id),
-            Some(s) if s.eq_ignore_ascii_case("Limited") => ban.limited.push(id),
+            Some(s) if s.eq_ignore_ascii_case("Forbidden")    => ban.forbidden.push(id),
+            Some(s) if s.eq_ignore_ascii_case("Limited")      => ban.limited.push(id),
             Some(s) if s.eq_ignore_ascii_case("Semi-Limited") => ban.semi_limited.push(id),
             _ => {} // unrestricted or absent — not included in banlist.json
         }
