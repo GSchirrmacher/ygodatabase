@@ -36,7 +36,12 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
     const requestId = ++latestRequestId.current;
     const params: Record<string, string> = {};
     if (search.trim().length > 0) params.name = search;
-    if (selectedSet !== "ALL") params.set = selectedSet;
+    if (selectedSet !== "ALL") {
+      params.set  = selectedSet;
+      params.sort = "set";
+    } else {
+      params.sort = "type";
+    }
     invoke<CardStub[]>("load_card_stubs", params).then((result) => {
       if (requestId === latestRequestId.current) setCards(result);
     });
@@ -285,57 +290,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
 
         {/* ── MAIN CONTENT: grid + detail pane ── */}
         <div style={{ display: "flex", flexDirection: "row", gap: 20, padding: "16px 20px", flex: 1, minHeight: 0 }}>
-          {/* RIGHT: CARD DETAILS */}
-          <div style={{
-            flex: 2, minWidth: 0, padding: 20,
-            border: "1px solid #ccc", borderRadius: 8,
-            overflow: "auto", height: "100%", boxSizing: "border-box",
-          }}>
-            {!selectedCard && !detailLoading && <p>Select a card</p>}
-            {detailLoading && <p>Loading…</p>}
-            {selectedCard && !detailLoading && (
-              <>
-                <div style={{
-                  background: getFrameBackground(selectedCard.frameType),
-                  padding: "10px 15px", borderRadius: 6,
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  marginBottom: 15,
-                }}>
-                  <h2 style={{ margin: 0 }}>{selectedCard.name}</h2>
-                  {selectedCard.attribute && (
-                    <img src={`/icons/attributes/${selectedCard.attribute}.png`} style={{ height: 28 }} alt={selectedCard.attribute} />
-                  )}
-                </div>
-                <div style={{ display: "flex", gap: 20 }}>
-                  <img src={selectedCard.imgPath?.replace("asset://", "/")} width={250} alt={selectedCard.name} />
-                  {renderStats(selectedCard)}
-                </div>
-                <div style={{
-                  marginTop: 15, padding: 8, borderRadius: 4,
-                  background: detailFrameBackground, textAlign: "center", fontWeight: "bold",
-                }}>
-                  {detailTypeline}
-                </div>
-                <div style={{ marginTop: 15, whiteSpace: "pre-wrap" }}>{selectedCard.desc}</div>
-                <div style={{ marginTop: 20 }}>
-                  {selectedCard.sets.map((set: CardSet) => (
-                    <div key={set.setCode ?? "unknown"} style={{ marginBottom: 12 }}>
-                      <h4>{set.setName ?? set.setCode}</h4>
-                      {set.rarities.map((r: CardSetRarity) =>
-                        renderRarityRow({
-                          id: selectedCard.id,
-                          setCode: set.setCode,
-                          rarity: r.rarity,
-                          collectionAmount: r.collectionAmount,
-                          setPrice: r.setPrice,
-                        })
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+
           {/* LEFT: CARD GRID */}
           <div ref={gridRef} style={{ flex: 3, minWidth: 0, height: "100%", overflow: "hidden" }}>
             {gridWidth > 0 && (() => {
@@ -407,6 +362,58 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
                 />
               );
             })()}
+          </div>
+
+          {/* RIGHT: CARD DETAILS */}
+          <div style={{
+            flex: 2, minWidth: 0, padding: 20,
+            border: "1px solid #ccc", borderRadius: 8,
+            overflow: "auto", height: "100%", boxSizing: "border-box",
+          }}>
+            {!selectedCard && !detailLoading && <p>Select a card</p>}
+            {detailLoading && <p>Loading…</p>}
+            {selectedCard && !detailLoading && (
+              <>
+                <div style={{
+                  background: getFrameBackground(selectedCard.frameType),
+                  padding: "10px 15px", borderRadius: 6,
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  marginBottom: 15,
+                }}>
+                  <h2 style={{ margin: 0 }}>{selectedCard.name}</h2>
+                  {selectedCard.attribute && (
+                    <img src={`/icons/attributes/${selectedCard.attribute}.png`} style={{ height: 28 }} alt={selectedCard.attribute} />
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 20 }}>
+                  <img src={selectedCard.imgPath?.replace("asset://", "/")} width={250} alt={selectedCard.name} />
+                  {renderStats(selectedCard)}
+                </div>
+                <div style={{
+                  marginTop: 15, padding: 8, borderRadius: 4,
+                  background: detailFrameBackground, textAlign: "center", fontWeight: "bold",
+                }}>
+                  {detailTypeline}
+                </div>
+                <div style={{ marginTop: 15, whiteSpace: "pre-wrap" }}>{selectedCard.desc}</div>
+                <div style={{ marginTop: 20 }}>
+                  {selectedCard.sets.map((set: CardSet) => (
+                    <div key={set.setCode ?? "unknown"} style={{ marginBottom: 12 }}>
+                      <h4>{set.setName ?? set.setCode}</h4>
+                      {set.rarities.map((r: CardSetRarity) =>
+                        renderRarityRow({
+                          id: selectedCard.id,
+                          setCode: set.setCode,
+                          rarity: r.rarity,
+                          collectionAmount: r.collectionAmount,
+                          setPrice: r.setPrice,
+                        })
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

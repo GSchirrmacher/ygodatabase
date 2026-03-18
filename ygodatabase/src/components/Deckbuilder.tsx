@@ -152,7 +152,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   useEffect(() => {
     const reqId = ++latestReq.current;
     setCardLoading(true);
-    const params = filtersToParams({ ...filters, name: search });
+    const params = { ...filtersToParams({ ...filters, name: search }), sort: "type" };
     invoke<CardStub[]>("load_card_stubs", params).then((r) => {
       if (reqId === latestReq.current) { setCards(r); setCardLoading(false); }
     }).catch(() => setCardLoading(false));

@@ -8,6 +8,8 @@ export interface CardStub {
   frameType?: string;
   rarities: (string | null)[];
   totalCollectionAmount: number;
+  level?: number;
+  setCode?: string;
 }
 
 export interface CardSetRarity {

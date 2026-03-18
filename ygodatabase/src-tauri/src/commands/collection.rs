@@ -11,8 +11,8 @@ use crate::models::{CardDetail, CardSet, CardSetRarity, CardStub, RawDetailRow, 
 pub fn load_card_stubs(
     name: Option<String>,
     set: Option<String>,
-    category: Option<String>,
-    frame_type: Option<String>,
+    category: Option<String>,   // "monster" | "spell" | "trap"
+    frame_type: Option<String>,   // exact DB frameType (subcategory); overrides category
     attribute: Option<String>,
     race: Option<String>,
     level: Option<i64>,
@@ -20,40 +20,66 @@ pub fn load_card_stubs(
     atk: Option<i64>,
     def: Option<i64>,
     ban_status: Option<String>,
+    sort: Option<String>,   // "set" | "type" (default "type")
 ) -> Result<Vec<CardStub>, String> {
     let conn = open_db()?;
 
-    // Monster frame types — used when category="monster" but no specific frame_type chosen
+    // Monster frame types for category="monster" IN-clause
     const MONSTER_FRAMES: &[&str] = &[
         "normal", "effect", "ritual", "fusion", "synchro", "xyz", "link",
         "normal_pendulum", "effect_pendulum", "ritual_pendulum",
         "fusion_pendulum", "synchro_pendulum", "xyz_pendulum",
     ];
 
-    // Build the frameType clause dynamically:
-    //   - specific frame_type selected  → exact match
-    //   - category="monster", no frame_type → IN (all monster frames)
-    //   - category="spell"/"trap"        → exact match on that value
-    //   - nothing selected               → no clause
     let frame_clause = if let Some(ref ft) = frame_type {
-        // specific subcategory chosen — exact match
         format!("AND c.frameType = '{}'", ft.replace('\'', "''"))
     } else if let Some(ref cat) = category {
         match cat.as_str() {
             "monster" => {
-                let list = MONSTER_FRAMES
-                    .iter()
+                let list = MONSTER_FRAMES.iter()
                     .map(|f| format!("'{}'", f))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                    .collect::<Vec<_>>().join(", ");
                 format!("AND c.frameType IN ({})", list)
             }
             "spell" => "AND c.frameType = 'spell'".to_string(),
-            "trap"  => "AND c.frameType = 'trap'".to_string(),
+            "trap" => "AND c.frameType = 'trap'".to_string(),
             _       => String::new(),
         }
     } else {
         String::new()
+    };
+
+    // ── ORDER BY ─────────────────────────────────────────────────────────────
+    // "set"  → sort by set_code ascending (groups cards within a set by their
+    //           collector number, which is embedded in the code e.g. DUNE-EN056)
+    // "type" → monster / spell / trap bucket first, then frameType order within
+    //          monsters (normal < effect < ritual < fusion < fusion_pendulum <
+    //          synchro < synchro_pendulum < xyz < xyz_pendulum < link),
+    //          then level/rank/rating DESC, then name ASC.
+    //          Spells and traps sort only by name ASC.
+    let order_clause = match sort.as_deref().unwrap_or("type") {
+        "set" => "ORDER BY cs.set_code ASC, c.name ASC".to_string(),
+        _ => "ORDER BY
+            CASE c.frameType
+                WHEN 'normal' THEN 100
+                WHEN 'effect' THEN 110
+                WHEN 'normal_pendulum' THEN 120
+                WHEN 'effect_pendulum' THEN 130
+                WHEN 'ritual' THEN 140
+                WHEN 'ritual_pendulum' THEN 150
+                WHEN 'fusion' THEN 160
+                WHEN 'fusion_pendulum' THEN 170
+                WHEN 'synchro' THEN 180
+                WHEN 'synchro_pendulum' THEN 190
+                WHEN 'xyz' THEN 200
+                WHEN 'xyz_pendulum' THEN 210
+                WHEN 'link' THEN 220
+                WHEN 'spell' THEN 300
+                WHEN 'trap' THEN 400
+                ELSE 500
+            END ASC,
+            COALESCE(c.level, c.linkval, 0) DESC,
+            c.name ASC".to_string(),
     };
 
     let sql = format!("
@@ -66,14 +92,16 @@ pub fn load_card_stubs(
             ci.local_path,
             c.frameType,
             cs.set_rarity,
-            cs.collection_amount
+            cs.collection_amount,
+            c.level,
+            cs.set_code
         FROM cards c
         LEFT JOIN card_images ci ON c.id = ci.card_id
         LEFT JOIN card_sets cs ON c.id = cs.card_id
         WHERE (:name IS NULL OR c.name LIKE :name)
-          AND (:set IS NULL OR cs.set_name  = :set)
+          AND (:set IS NULL OR cs.set_name = :set)
           {frame_clause}
-          AND (:attribute IS NULL OR c.attribute  = :attribute)
+          AND (:attribute IS NULL OR c.attribute = :attribute)
           AND (:race IS NULL OR c.race = :race)
           AND (:level IS NULL OR c.level = :level)
           AND (:scale IS NULL OR c.scale = :scale)
@@ -82,6 +110,7 @@ pub fn load_card_stubs(
           AND (:ban_status IS NULL OR (
                 LOWER(json_extract(c.banlist_info, '$.ban_tcg')) = LOWER(:ban_status)
               ))
+        {order_clause}
     ");
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -110,30 +139,44 @@ pub fn load_card_stubs(
                 frame_type: row.get("frameType").ok(),
                 set_rarity: row.get("set_rarity").ok(),
                 collection_amount: row.get("collection_amount").ok(),
+                level: row.get("level").ok(),
+                set_code: row.get("set_code").ok(),
             })
         })
         .map_err(|e| e.to_string())?;
 
+    // Collapse duplicate rows (one per set×rarity) into a single stub per card.
+    // The ORDER BY is applied before this collapse, so the first row seen for
+    // each card already has the correct sort position — we preserve insertion
+    // order by using an IndexMap-style approach with a Vec for ordering.
+    let mut order: Vec<i64> = Vec::new();
     let mut map: HashMap<i64, CardStub> = HashMap::new();
     for r in rows {
         let r = r.map_err(|e| e.to_string())?;
         let collection_amount = r.collection_amount.unwrap_or(0);
-        let stub = map.entry(r.id).or_insert_with(|| CardStub {
-            id: r.id,
-            name: r.name.clone(),
-            card_type: r.card_type.clone(),
-            has_alt_art: r.has_alt_art,
-            img_path: normalize_img_path(r.img_path.clone()),
-            image_id: r.image_id,
-            frame_type: r.frame_type.clone(),
-            rarities: Vec::new(),
-            total_collection_amount: 0,
-        });
+        if !map.contains_key(&r.id) {
+            order.push(r.id);
+            map.insert(r.id, CardStub {
+                id: r.id,
+                name: r.name.clone(),
+                card_type: r.card_type.clone(),
+                has_alt_art: r.has_alt_art,
+                img_path: normalize_img_path(r.img_path.clone()),
+                image_id: r.image_id,
+                frame_type: r.frame_type.clone(),
+                rarities: Vec::new(),
+                total_collection_amount: 0,
+                level: r.level,
+                set_code: r.set_code.clone(),
+            });
+        }
+        let stub = map.get_mut(&r.id).unwrap();
         stub.rarities.push(r.set_rarity);
         stub.total_collection_amount += collection_amount;
     }
 
-    Ok(map.into_values().collect())
+    // Return in sorted order (order vec preserves first-seen position per card)
+    Ok(order.into_iter().filter_map(|id| map.remove(&id)).collect())
 }
 
 // ---------------------------------------------------------------------------
@@ -168,7 +211,7 @@ pub fn load_card_detail(card_id: i64, set_name: Option<String>) -> Result<CardDe
             cs.set_price
         FROM cards c
         LEFT JOIN card_images ci ON c.id = ci.card_id
-        LEFT JOIN card_sets cs   ON c.id = cs.card_id
+        LEFT JOIN card_sets cs ON c.id = cs.card_id
         WHERE c.id = :card_id
           AND (:set_name IS NULL OR cs.set_name = :set_name)
     ";
