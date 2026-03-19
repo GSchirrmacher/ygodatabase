@@ -20,6 +20,13 @@ use commands::deck::{
     load_deck,
 };
 
+// TODO : Add Archetype-based filter
+// TODO : Fix alt arts in database
+// TODO : Fix slow loading times
+// TODO : Add other formats
+// TODO : UI stuff
+
+
 #[tauri::command]
 fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
