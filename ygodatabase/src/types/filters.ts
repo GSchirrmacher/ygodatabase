@@ -2,8 +2,8 @@
 // null means "no filter applied".
 export interface CardFilters {
   name: string;
-  category: string | null;  // "monster" | "spell" | "trap" — frontend concept
-  frameType: string | null;  // exact DB frameType (subcategory); null = any within category
+  category: string | null;
+  frameType: string | null;
   race: string | null;
   attribute: string | null;
   level: string;
@@ -11,6 +11,7 @@ export interface CardFilters {
   atk: string;
   def: string;
   banStatus: string | null;
+  archetype: string;   // free-text exact match against JSON array
 }
 
 export const EMPTY_FILTERS: CardFilters = {
@@ -24,6 +25,7 @@ export const EMPTY_FILTERS: CardFilters = {
   atk: "",
   def: "",
   banStatus: null,
+  archetype: "",
 };
 
 // ── Static option lists ─────────────────────────────────────────────────────
@@ -55,10 +57,10 @@ export const SUBCATEGORY_OPTIONS: Record<string, { value: string; label: string 
     { value: "synchro", label: "Synchro" },
     { value: "xyz", label: "Xyz" },
     { value: "link", label: "Link" },
-    { value: "normal_pendulum", label: "Normal Pendulum" },
-    { value: "effect_pendulum", label: "Effect Pendulum" },
-    { value: "ritual_pendulum", label: "Ritual Pendulum" },
-    { value: "fusion_pendulum", label: "Fusion Pendulum" },
+    { value: "normal_pendulum", label: "Normal Pendulum"  },
+    { value: "effect_pendulum", label: "Effect Pendulum"  },
+    { value: "ritual_pendulum", label: "Ritual Pendulum"  },
+    { value: "fusion_pendulum", label: "Fusion Pendulum"  },
     { value: "synchro_pendulum", label: "Synchro Pendulum" },
     { value: "xyz_pendulum", label: "Xyz Pendulum" },
   ],

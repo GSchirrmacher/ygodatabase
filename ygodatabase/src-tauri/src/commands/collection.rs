@@ -20,6 +20,7 @@ pub fn load_card_stubs(
     atk: Option<i64>,
     def: Option<i64>,
     ban_status: Option<String>,
+    archetype: Option<String>,   // exact archetype name, matched inside JSON array
     sort: Option<String>,   // "set" | "type" (default "type")
 ) -> Result<Vec<CardStub>, String> {
     let conn = open_db()?;
@@ -110,6 +111,13 @@ pub fn load_card_stubs(
           AND (:ban_status IS NULL OR (
                 LOWER(json_extract(c.banlist_info, '$.ban_tcg')) = LOWER(:ban_status)
               ))
+          AND (:archetype IS NULL OR (
+                c.archetype IS NOT NULL AND
+                EXISTS (
+                    SELECT 1 FROM json_each(c.archetype)
+                    WHERE LOWER(value) = LOWER(:archetype)
+                )
+              ))
         {order_clause}
     ");
 
@@ -125,6 +133,7 @@ pub fn load_card_stubs(
         ":atk": atk,
         ":def": def,
         ":ban_status": ban_status.as_ref(),
+        ":archetype": archetype.as_ref(),
     };
 
     let rows = stmt
@@ -286,9 +295,9 @@ pub fn load_card_detail(card_id: i64, set_name: Option<String>) -> Result<CardDe
                 d.sets.last_mut().unwrap()
             };
             set_ref.rarities.push(CardSetRarity {
-                rarity: r.set_rarity.clone(),
+                rarity:            r.set_rarity.clone(),
                 collection_amount: r.collection_amount,
-                set_price: r.set_price,
+                set_price:         r.set_price,
             });
         }
     }
@@ -320,6 +329,38 @@ pub fn get_all_sets() -> Result<Vec<String>, String> {
         sets.push(s.map_err(|e| e.to_string())?);
     }
     Ok(sets)
+}
+
+// ---------------------------------------------------------------------------
+// Archetypes
+// ---------------------------------------------------------------------------
+
+/// Returns all distinct archetype names across all cards, sorted alphabetically.
+/// The archetype column stores a JSON array, so we use json_each to expand it.
+#[tauri::command]
+pub fn get_all_archetypes() -> Result<Vec<String>, String> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT DISTINCT je.value
+             FROM cards c, json_each(c.archetype) je
+             WHERE c.archetype IS NOT NULL
+               AND c.archetype != 'null'
+               AND je.value IS NOT NULL
+               AND je.value != ''
+             ORDER BY je.value COLLATE NOCASE",
+        )
+        .map_err(|e| e.to_string())?;
+ 
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| e.to_string())?;
+ 
+    let mut archetypes = Vec::new();
+    for r in rows {
+        archetypes.push(r.map_err(|e| e.to_string())?);
+    }
+    Ok(archetypes)
 }
 
 // ---------------------------------------------------------------------------

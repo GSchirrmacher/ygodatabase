@@ -6,6 +6,7 @@ use db::{create_indexes, get_db_path};
 use rusqlite::Connection;
 use commands::collection::{
     get_all_sets,
+    get_all_archetypes,
     load_card_detail,
     load_card_stubs,
     update_collection_amount,
@@ -20,7 +21,6 @@ use commands::deck::{
     load_deck,
 };
 
-// TODO : Add Archetype-based filter
 // TODO : Fix alt arts in database
 // TODO : Fix slow loading times
 // TODO : Add other formats
@@ -45,6 +45,7 @@ fn main() {
             load_card_stubs,
             load_card_detail,
             get_all_sets,
+            get_all_archetypes,
             update_collection_amount,
             get_ban_list,
             get_collection_amounts,

@@ -18,6 +18,7 @@ export function filtersToParams(f: CardFilters): Record<string, string | number>
   if (f.atk.trim()) p.atk = parseInt(f.atk, 10);
   if (f.def.trim()) p.def = parseInt(f.def, 10);
   if (f.banStatus) p.banStatus = f.banStatus;
+  if (f.archetype.trim()) p.archetype = f.archetype.trim();
   return p;
 }
 

@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import type { CardFilters } from "../types/filters";
 import {
   CATEGORY_OPTIONS,
@@ -17,6 +19,12 @@ interface CardFiltersProps {
 
 export default function CardFilters({ filters, onChange, resultCount, loading }: CardFiltersProps) {
   const cat = filters.category;
+
+  // Load archetype list from DB once on mount
+  const [archetypeList, setArchetypeList] = useState<string[]>([]);
+  useEffect(() => {
+    invoke<string[]>("get_all_archetypes").then(setArchetypeList).catch(() => {});
+  }, []);
 
   function set(patch: Partial<CardFilters>) {
     onChange({ ...filters, ...patch });
@@ -49,7 +57,7 @@ export default function CardFilters({ filters, onChange, resultCount, loading }:
   }
 
   const isMonster = cat === "monster";
-  const showSub = isMonster;
+  const showSub = isMonster;                                         // subcategory picker
   const showAttr = isMonster;
   const showLevel = isMonster;
   const showScale = filters.frameType?.includes("pendulum") ?? false;
@@ -57,7 +65,7 @@ export default function CardFilters({ filters, onChange, resultCount, loading }:
   const showAtk = isMonster;
   const showRace = cat !== null;  // monster race OR spell/trap subtype
 
-  const subOptions  = cat ? (SUBCATEGORY_OPTIONS[cat] ?? []) : [];
+  const subOptions = cat ? (SUBCATEGORY_OPTIONS[cat] ?? []) : [];
   const raceOptions = cat ? (RACE_OPTIONS[cat] ?? []) : [];
 
   // Active filter count (excluding name, which lives in the topbar)
@@ -65,6 +73,7 @@ export default function CardFilters({ filters, onChange, resultCount, loading }:
     filters.category, filters.frameType, filters.race, filters.attribute,
     filters.level || null, filters.scale || null,
     filters.atk || null, filters.def || null, filters.banStatus,
+    filters.archetype || null,
   ].filter(Boolean).length;
 
   const hasFilters = activeCount > 0;
@@ -262,6 +271,24 @@ export default function CardFilters({ filters, onChange, resultCount, loading }:
               onChange={(e) => numericSet("def", e.target.value)} />
           </div>
         )}
+
+        <div className="cf-divider" />
+
+        {/* Archetype — always visible, populated from DB */}
+        <div className="cf-group">
+          <span className="cf-label">Archetype</span>
+          <select
+            className="cf-select"
+            style={{ maxWidth: 160 }}
+            value={filters.archetype}
+            onChange={(e) => set({ archetype: e.target.value })}
+          >
+            <option value="">Any</option>
+            {archetypeList.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
 
         <div className="cf-divider" />
 
