@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use rusqlite::named_params;
 
-use crate::db::{open_db, normalize_img_path};
+use crate::db::{open_db, normalize_img_path, normalize_thumb_path};
 use crate::models::{CardDetail, CardSet, CardSetRarity, CardStub, RawDetailRow, RawStubRow};
 
 // ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ pub fn load_card_stubs(
         WHERE (:name IS NULL OR c.name LIKE :name)
           AND (:set IS NULL OR cs.set_name = :set)
           {frame_clause}
-          AND (:attribute IS NULL OR c.attribute = :attribute)
+          AND (:attribute  IS NULL OR c.attribute  = :attribute)
           AND (:race IS NULL OR c.race = :race)
           AND (:level IS NULL OR c.level = :level)
           AND (:scale IS NULL OR c.scale = :scale)
@@ -165,12 +165,14 @@ pub fn load_card_stubs(
         let collection_amount = r.collection_amount.unwrap_or(0);
         if !map.contains_key(&r.id) {
             order.push(r.id);
+            let thumb = normalize_thumb_path(r.img_path.as_ref());
             map.insert(r.id, CardStub {
                 id: r.id,
                 name: r.name.clone(),
                 card_type: r.card_type.clone(),
                 has_alt_art: r.has_alt_art,
                 img_path: normalize_img_path(r.img_path.clone()),
+                img_thumb_path: thumb,
                 image_id: r.image_id,
                 frame_type: r.frame_type.clone(),
                 rarities: Vec::new(),
@@ -295,9 +297,9 @@ pub fn load_card_detail(card_id: i64, set_name: Option<String>) -> Result<CardDe
                 d.sets.last_mut().unwrap()
             };
             set_ref.rarities.push(CardSetRarity {
-                rarity:            r.set_rarity.clone(),
+                rarity: r.set_rarity.clone(),
                 collection_amount: r.collection_amount,
-                set_price:         r.set_price,
+                set_price: r.set_price,
             });
         }
     }
@@ -351,11 +353,11 @@ pub fn get_all_archetypes() -> Result<Vec<String>, String> {
              ORDER BY je.value COLLATE NOCASE",
         )
         .map_err(|e| e.to_string())?;
- 
+
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(0))
         .map_err(|e| e.to_string())?;
- 
+
     let mut archetypes = Vec::new();
     for r in rows {
         archetypes.push(r.map_err(|e| e.to_string())?);

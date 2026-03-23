@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 
-use crate::db::{get_db_path, normalize_img_path, open_db};
+use crate::db::{get_db_path, normalize_img_path, normalize_thumb_path, open_db};
 
 // Raw shape of the banlist_info JSON column
 #[derive(Deserialize)]
@@ -42,6 +42,7 @@ pub struct DeckStub {
     pub id: i64,
     pub name: String,
     pub img_path: Option<String>,
+    pub img_thumb_path: Option<String>,
     pub frame_type: Option<String>,
 }
 
@@ -86,9 +87,10 @@ fn fetch_stubs_by_ids(ids: &[i64]) -> Result<HashMap<i64, DeckStub>, String> {
     let rows = stmt
         .query_map(params.as_slice(), |row| {
             Ok(DeckStub {
-                id:         row.get(0)?,
-                name:       row.get(1)?,
-                img_path:   row.get(2)?,
+                id: row.get(0)?,
+                name: row.get(1)?,
+                img_path: row.get(2)?,
+                img_thumb_path: None, // filled in below
                 frame_type: row.get(3).ok(),
             })
         })
@@ -97,6 +99,7 @@ fn fetch_stubs_by_ids(ids: &[i64]) -> Result<HashMap<i64, DeckStub>, String> {
     let mut map = HashMap::new();
     for r in rows {
         let mut stub = r.map_err(|e| e.to_string())?;
+        stub.img_thumb_path = normalize_thumb_path(stub.img_path.as_ref());
         stub.img_path = normalize_img_path(stub.img_path);
         map.insert(stub.id, stub);
     }
@@ -245,15 +248,15 @@ pub fn sync_banlist_from_db(format: String) -> Result<(), String> {
 
         // Pick the relevant field based on the requested format
         let status: Option<&str> = match format.to_lowercase().as_str() {
-            "tcg"  => info.ban_tcg.as_deref(),
-            "ocg"  => info.ban_ocg.as_deref(),
+            "tcg" => info.ban_tcg.as_deref(),
+            "ocg" => info.ban_ocg.as_deref(),
             "goat" => info.ban_goat.as_deref(),
             other  => return Err(format!("Unknown format '{}'. Use tcg, ocg, or goat.", other)),
         };
 
         match status {
-            Some(s) if s.eq_ignore_ascii_case("Forbidden")    => ban.forbidden.push(id),
-            Some(s) if s.eq_ignore_ascii_case("Limited")      => ban.limited.push(id),
+            Some(s) if s.eq_ignore_ascii_case("Forbidden") => ban.forbidden.push(id),
+            Some(s) if s.eq_ignore_ascii_case("Limited") => ban.limited.push(id),
             Some(s) if s.eq_ignore_ascii_case("Semi-Limited") => ban.semi_limited.push(id),
             _ => {} // unrestricted or absent — not included in banlist.json
         }
@@ -281,9 +284,9 @@ pub fn load_deck(name: String) -> Result<LoadedDeck, String> {
     let content = fs::read_to_string(deck_path(&name))
         .map_err(|e| format!("Could not read deck '{}': {}", name, e))?;
 
-    let mut main_ids:  Vec<i64> = Vec::new();
+    let mut main_ids: Vec<i64> = Vec::new();
     let mut extra_ids: Vec<i64> = Vec::new();
-    let mut side_ids:  Vec<i64> = Vec::new();
+    let mut side_ids: Vec<i64> = Vec::new();
 
     #[derive(PartialEq)]
     enum Section { None, Main, Extra, Side }
@@ -292,19 +295,19 @@ pub fn load_deck(name: String) -> Result<LoadedDeck, String> {
     for line in content.lines() {
         let line = line.trim();
         match line {
-            "#main"  => { section = Section::Main;  continue; }
+            "#main" => { section = Section::Main;  continue; }
             "#extra" => { section = Section::Extra; continue; }
-            "!side"  => { section = Section::Side;  continue; }
+            "!side" => { section = Section::Side;  continue; }
             _ if line.starts_with('#') => continue, // e.g. #created by Player
-            _ if line.is_empty()       => continue,
+            _ if line.is_empty() => continue,
             _ => {}
         }
         if let Ok(id) = line.parse::<i64>() {
             match section {
-                Section::Main  => main_ids.push(id),
+                Section::Main => main_ids.push(id),
                 Section::Extra => extra_ids.push(id),
-                Section::Side  => side_ids.push(id),
-                Section::None  => {}
+                Section::Side => side_ids.push(id),
+                Section::None => {}
             }
         }
     }
@@ -323,8 +326,8 @@ pub fn load_deck(name: String) -> Result<LoadedDeck, String> {
 
     Ok(LoadedDeck {
         name,
-        main:  resolve_ids(&main_ids,  &map),
+        main: resolve_ids(&main_ids, &map),
         extra: resolve_ids(&extra_ids, &map),
-        side:  resolve_ids(&side_ids,  &map),
+        side: resolve_ids(&side_ids, &map),
     })
 }

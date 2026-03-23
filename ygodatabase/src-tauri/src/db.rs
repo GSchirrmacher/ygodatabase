@@ -55,3 +55,19 @@ pub fn normalize_img_path(path: Option<String>) -> Option<String> {
         format!("asset://{}", img_path)
     })
 }
+
+/// Derives the thumbnail asset URL from a full image path.
+/// img/12345_12345.jpg  →  asset://img_thumb/12345_12345.webp
+/// Returns None if no img path is available.
+pub fn normalize_thumb_path(path: Option<&String>) -> Option<String> {
+    let p = path?;
+    let fixed = p.replace("\\", "/");
+    let stem = if let Some(idx) = fixed.find("img/") {
+        let after = &fixed[idx + 4..]; // skip "img/"
+        // strip extension
+        if let Some(dot) = after.rfind('.') { &after[..dot] } else { after }
+    } else {
+        return None;
+    };
+    Some(format!("asset://img_thumb/{}.webp", stem))
+}

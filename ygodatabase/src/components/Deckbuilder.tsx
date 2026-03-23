@@ -15,6 +15,7 @@ interface DeckEntry {
   id: number;
   name: string;
   imgPath?: string;
+  imgThumbPath?: string;
   frameType?: string;
 }
 
@@ -41,6 +42,7 @@ interface DeckStub {
   id: number;
   name: string;
   imgPath?: string;
+  imgThumbPath?: string;
   frameType?: string;
 }
 
@@ -76,7 +78,7 @@ function maxCopies(banList: BanList, id: number): number {
 }
 
 function stubToDeckEntry(s: DeckStub): DeckEntry {
-  return { id: s.id, name: s.name, imgPath: s.imgPath, frameType: s.frameType };
+  return { id: s.id, name: s.name, imgPath: s.imgPath, imgThumbPath: s.imgThumbPath, frameType: s.frameType };
 }
 
 // ---------------------------------------------------------------------------
@@ -182,7 +184,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   function addToDeck(stub: CardStub) {
     setDeck((prev) => {
       if (countInDeck(prev, stub.id) >= maxCopies(banList, stub.id)) return prev;
-      const entry: DeckEntry = { id: stub.id, name: stub.name, imgPath: stub.imgPath, frameType: stub.frameType };
+      const entry: DeckEntry = { id: stub.id, name: stub.name, imgPath: stub.imgPath, imgThumbPath: stub.imgThumbPath, frameType: stub.frameType };
       if (isExtraCard(stub.frameType)) {
         if (prev.extra.length >= 15) return prev;
         return { ...prev, extra: [...prev.extra, entry] };
@@ -219,7 +221,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
 
   // ── Drag ──────────────────────────────────────────────────────────────────
   function handleDragStart(stub: CardStub) { dragStub.current = stub; }
-  function handleDragEnd()                 { dragStub.current = null; }
+  function handleDragEnd() { dragStub.current = null; }
   function handleDeckDrop(e: React.DragEvent) {
     e.preventDefault();
     if (dragStub.current) addToDeck(dragStub.current);
@@ -233,9 +235,9 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     try {
       await invoke("save_deck", {
         name,
-        mainIds:  deck.main.map((e) => e.id),
+        mainIds: deck.main.map((e) => e.id),
         extraIds: deck.extra.map((e) => e.id),
-        sideIds:  deck.side.map((e) => e.id),
+        sideIds: deck.side.map((e) => e.id),
       });
       setSaveStatus("saved");
       refreshDeckList();
@@ -301,7 +303,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     return null;
   }
 
-  const detailFrameBg  = useMemo(() => getFrameBackground(selectedCard?.frameType), [selectedCard?.frameType]);
+  const detailFrameBg = useMemo(() => getFrameBackground(selectedCard?.frameType), [selectedCard?.frameType]);
   const detailTypeline = useMemo(() => selectedCard ? formatTypeline(selectedCard) : "", [selectedCard]);
 
   // ── Stat rendering ────────────────────────────────────────────────────────
@@ -443,7 +445,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
                   onContextMenu={(e) => { e.preventDefault(); removeOneFromSection(entry.id, section); }}
                 >
                   <img
-                    src={entry.imgPath?.replace("asset://", "/")}
+                    src={(entry.imgThumbPath ?? entry.imgPath)?.replace("asset://", "/")}
                     width={52}
                     style={{ display: "block", borderRadius: 4, opacity: compareMode && missing > 0 ? 0.65 : 1 }}
                     draggable={false}
@@ -467,7 +469,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   const CARD_HEIGHT = 180;
 
   const saveLabel = saveStatus === "saved" ? "Saved ✓" : saveStatus === "error" ? "Error ✕" : "Save";
-  const saveBg    = saveStatus === "saved" ? "rgba(76,175,80,0.2)" : saveStatus === "error" ? "rgba(220,50,50,0.2)" : "transparent";
+  const saveBg = saveStatus === "saved" ? "rgba(76,175,80,0.2)" : saveStatus === "error" ? "rgba(220,50,50,0.2)" : "transparent";
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -649,17 +651,17 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
           border-color: rgba(100,160,220,0.25);
           background: transparent;
         }
-        .dp-btn-compare:hover        { color:#8aadee; border-color:rgba(100,160,220,0.55); background:rgba(100,160,220,0.07); }
-        .dp-btn-compare.active       { color:#8aadee; border-color:rgba(100,160,220,0.6); background:rgba(100,160,220,0.12); }
+        .dp-btn-compare:hover { color:#8aadee; border-color:rgba(100,160,220,0.55); background:rgba(100,160,220,0.07); }
+        .dp-btn-compare.active { color:#8aadee; border-color:rgba(100,160,220,0.6); background:rgba(100,160,220,0.12); }
 
         .dp-btn-copy {
           color: rgba(200,150,40,0.65);
           border-color: rgba(200,150,40,0.2);
           background: transparent;
         }
-        .dp-btn-copy:hover  { color:#f0d060; border-color:rgba(212,175,55,0.55); background:rgba(212,175,55,0.07); }
-        .dp-btn-copy.ok     { color:#4caf50; border-color:rgba(76,175,80,0.5);   background:rgba(76,175,80,0.08); }
-        .dp-btn-copy.err    { color:#e74c3c; border-color:rgba(231,76,60,0.5);   background:rgba(231,76,60,0.08); }
+        .dp-btn-copy:hover { color:#f0d060; border-color:rgba(212,175,55,0.55); background:rgba(212,175,55,0.07); }
+        .dp-btn-copy.ok { color:#4caf50; border-color:rgba(76,175,80,0.5);   background:rgba(76,175,80,0.08); }
+        .dp-btn-copy.err { color:#e74c3c; border-color:rgba(231,76,60,0.5);   background:rgba(231,76,60,0.08); }
       `}</style>
 
       <div className="db-root">
@@ -814,7 +816,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
                               onContextMenu={(e) => { e.preventDefault(); removeFromDeckAny(c.id); }}
                             >
                               <img
-                                src={c.imgPath?.replace("asset://", "/")}
+                                src={(c.imgThumbPath ?? c.imgPath)?.replace("asset://", "/")}
                                 width={120} loading="lazy"
                                 style={{ display:"block", borderRadius:6 }}
                                 draggable={false}

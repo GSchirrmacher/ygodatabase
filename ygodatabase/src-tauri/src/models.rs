@@ -23,13 +23,14 @@ pub struct CardStub {
     pub name: String,
     pub card_type: String,
     pub has_alt_art: i64,
-    pub img_path: Option<String>,
+    pub img_path: Option<String>, // full-size JPEG, for detail pane
+    pub img_thumb_path: Option<String>, // small WebP, for grid
     pub image_id: Option<i64>,
     pub frame_type: Option<String>,
     pub rarities: Vec<Option<String>>,
     pub total_collection_amount: i64,
-    pub level: Option<i64>,       // for deck-builder type-sort within monster group
-    pub set_code: Option<String>, // first set_code seen; used for set-sort display
+    pub level: Option<i64>,
+    pub set_code: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -58,7 +59,6 @@ pub struct CardDetail {
 }
 
 // Raw query row helpers — not serialized, used only internally
-
 #[derive(Debug)]
 pub struct RawStubRow {
     pub id: i64,

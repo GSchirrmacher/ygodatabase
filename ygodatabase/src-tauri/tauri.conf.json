@@ -20,7 +20,11 @@
     "security": {
       "assetProtocol": {
         "enable": true,
-        "scope": ["$RESOURCE/*", "$APP/*", "$CWD/*"]
+        "scope": [
+          "$RESOURCE/*",
+          "$APP/*",
+          "$CWD/*"
+        ]
       }
     }
   },
@@ -34,6 +38,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["./ressources/img/**/*"]
+    "resources": [
+      "./ressources/img/**/*",
+      "./ressources/img_thumb/**/*"
+    ]
   }
 }

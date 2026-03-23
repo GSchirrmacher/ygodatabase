@@ -4,7 +4,8 @@ export interface CardStub {
   cardType: string;
   hasAltArt: number;
   imageId?: number;
-  imgPath?: string;
+  imgPath?: string;       // full-size JPEG
+  imgThumbPath?: string;  // small WebP for grid
   frameType?: string;
   rarities: (string | null)[];
   totalCollectionAmount: number;
