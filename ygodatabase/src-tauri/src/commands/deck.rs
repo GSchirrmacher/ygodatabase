@@ -44,6 +44,7 @@ pub struct DeckStub {
     pub img_path: Option<String>,
     pub img_thumb_path: Option<String>,
     pub frame_type: Option<String>,
+    pub genesys_points: i64,
 }
 
 // ---------------------------------------------------------------------------
@@ -51,8 +52,8 @@ pub struct DeckStub {
 // ---------------------------------------------------------------------------
 fn decks_dir() -> std::path::PathBuf {
     let mut path = get_db_path();
-    path.pop();           // remove cards.db → ressources/
-    path.push("decks");   // ressources/decks/
+    path.pop(); // remove cards.db → ressources/
+    path.push("decks"); // ressources/decks/
     path
 }
 
@@ -72,7 +73,8 @@ fn fetch_stubs_by_ids(ids: &[i64]) -> Result<HashMap<i64, DeckStub>, String> {
     // Build a parameterised IN clause: (?1,?2,?3,...)
     let placeholders: Vec<String> = (1..=ids.len()).map(|i| format!("?{}", i)).collect();
     let sql = format!(
-        "SELECT c.id, c.name, ci.local_path, c.frameType
+        "SELECT c.id, c.name, ci.local_path, c.frameType,
+                COALESCE(c.genesys_points, 0) as genesys_points
          FROM cards c
          LEFT JOIN card_images ci ON c.id = ci.card_id
          WHERE c.id IN ({})",
@@ -81,7 +83,6 @@ fn fetch_stubs_by_ids(ids: &[i64]) -> Result<HashMap<i64, DeckStub>, String> {
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
 
-    // rusqlite requires &dyn ToSql slice — build it from the ids
     let params: Vec<&dyn rusqlite::types::ToSql> = ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
 
     let rows = stmt
@@ -90,8 +91,9 @@ fn fetch_stubs_by_ids(ids: &[i64]) -> Result<HashMap<i64, DeckStub>, String> {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 img_path: row.get(2)?,
-                img_thumb_path: None, // filled in below
+                img_thumb_path: None,
                 frame_type: row.get(3).ok(),
+                genesys_points: row.get(4).unwrap_or(0),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -116,6 +118,7 @@ fn resolve_ids(ids: &[i64], map: &HashMap<i64, DeckStub>) -> Vec<DeckStub> {
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
+
 /// Reads `ressources/banlist.json`. Returns empty BanList if file is missing.
 #[tauri::command]
 pub fn get_ban_list() -> Result<BanList, String> {
@@ -198,7 +201,7 @@ pub fn save_deck(
     content.push_str("#extra\n");
     for id in &extra_ids { content.push_str(&format!("{}\n", id)); }
     content.push_str("!side\n");
-    for id in &side_ids  { content.push_str(&format!("{}\n", id)); }
+    for id in &side_ids { content.push_str(&format!("{}\n", id)); }
 
     fs::write(deck_path(&name), content).map_err(|e| e.to_string())
 }
@@ -248,14 +251,14 @@ pub fn sync_banlist_from_db(format: String) -> Result<(), String> {
 
         // Pick the relevant field based on the requested format
         let status: Option<&str> = match format.to_lowercase().as_str() {
-            "tcg" => info.ban_tcg.as_deref(),
-            "ocg" => info.ban_ocg.as_deref(),
+            "tcg"  => info.ban_tcg.as_deref(),
+            "ocg"  => info.ban_ocg.as_deref(),
             "goat" => info.ban_goat.as_deref(),
             other  => return Err(format!("Unknown format '{}'. Use tcg, ocg, or goat.", other)),
         };
 
         match status {
-            Some(s) if s.eq_ignore_ascii_case("Forbidden") => ban.forbidden.push(id),
+            Some(s) if s.eq_ignore_ascii_case("Forbidden")    => ban.forbidden.push(id),
             Some(s) if s.eq_ignore_ascii_case("Limited") => ban.limited.push(id),
             Some(s) if s.eq_ignore_ascii_case("Semi-Limited") => ban.semi_limited.push(id),
             _ => {} // unrestricted or absent — not included in banlist.json
