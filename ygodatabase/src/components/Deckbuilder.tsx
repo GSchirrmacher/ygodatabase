@@ -17,6 +17,7 @@ interface DeckEntry {
   imgPath?: string;
   imgThumbPath?: string;
   frameType?: string;
+  genesysPoints: number;
 }
 
 interface Deck {
@@ -44,6 +45,7 @@ interface DeckStub {
   imgPath?: string;
   imgThumbPath?: string;
   frameType?: string;
+  genesysPoints: number;
 }
 
 type DeckTarget = "main" | "side";
@@ -78,7 +80,7 @@ function maxCopies(banList: BanList, id: number): number {
 }
 
 function stubToDeckEntry(s: DeckStub): DeckEntry {
-  return { id: s.id, name: s.name, imgPath: s.imgPath, imgThumbPath: s.imgThumbPath, frameType: s.frameType };
+  return { id: s.id, name: s.name, imgPath: s.imgPath, imgThumbPath: s.imgThumbPath, frameType: s.frameType, genesysPoints: s.genesysPoints ?? 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -100,7 +102,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   const [deck, setDeck] = useState<Deck>({ main: [], extra: [], side: [] });
   const [deckTarget, setDeckTarget] = useState<DeckTarget>("main");
   const [banList, setBanList] = useState<BanList>({ forbidden: [], limited: [], semiLimited: [] });
-  const [banFormat, setBanFormat] = useState<"tcg" | "ocg" | "goat">("tcg");
+  const [banFormat, setBanFormat] = useState<"tcg" | "ocg" | "goat" | "genesys">("tcg");
   const [collapsed, setCollapsed] = useState({ main: false, extra: false, side: false });
 
   // ── Save / load ───────────────────────────────────────────────────────────
@@ -118,7 +120,12 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
 
   // ── Bootstrap + format switch ────────────────────────────────────────────
   // Syncs banlist.json from the DB for the active format, then reloads it.
-  async function syncAndReload(fmt: "tcg" | "ocg" | "goat") {
+  async function syncAndReload(fmt: "tcg" | "ocg" | "goat" | "genesys") {
+    if (fmt === "genesys") {
+      // Genesys uses points, not a ban list — clear the ban list so no restrictions apply
+      setBanList({ forbidden: [], limited: [], semiLimited: [] });
+      return;
+    }
     try {
       await invoke("sync_banlist_from_db", { format: fmt });
     } catch (err) {
@@ -184,7 +191,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   function addToDeck(stub: CardStub) {
     setDeck((prev) => {
       if (countInDeck(prev, stub.id) >= maxCopies(banList, stub.id)) return prev;
-      const entry: DeckEntry = { id: stub.id, name: stub.name, imgPath: stub.imgPath, imgThumbPath: stub.imgThumbPath, frameType: stub.frameType };
+      const entry: DeckEntry = { id: stub.id, name: stub.name, imgPath: stub.imgPath, imgThumbPath: stub.imgThumbPath, frameType: stub.frameType, genesysPoints: stub.genesysPoints ?? 0 };
       if (isExtraCard(stub.frameType)) {
         if (prev.extra.length >= 15) return prev;
         return { ...prev, extra: [...prev.extra, entry] };
@@ -221,7 +228,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
 
   // ── Drag ──────────────────────────────────────────────────────────────────
   function handleDragStart(stub: CardStub) { dragStub.current = stub; }
-  function handleDragEnd() { dragStub.current = null; }
+  function handleDragEnd()                 { dragStub.current = null; }
   function handleDeckDrop(e: React.DragEvent) {
     e.preventDefault();
     if (dragStub.current) addToDeck(dragStub.current);
@@ -235,9 +242,9 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     try {
       await invoke("save_deck", {
         name,
-        mainIds: deck.main.map((e) => e.id),
+        mainIds:  deck.main.map((e) => e.id),
         extraIds: deck.extra.map((e) => e.id),
-        sideIds: deck.side.map((e) => e.id),
+        sideIds:  deck.side.map((e) => e.id),
       });
       setSaveStatus("saved");
       refreshDeckList();
@@ -296,6 +303,13 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     return m;
   }, [deck]);
 
+  // Genesys: total points spent across all sections (each copy costs its own points)
+  const genesysPointsTotal = useMemo(() => {
+    if (banFormat !== "genesys") return 0;
+    const allEntries = [...deck.main, ...deck.extra, ...deck.side];
+    return allEntries.reduce((sum, e) => sum + (e.genesysPoints ?? 0), 0);
+  }, [deck, banFormat]);
+
   function banStatus(id: number): "forbidden" | "limited" | "semi" | null {
     if (banList.forbidden.includes(id)) return "forbidden";
     if (banList.limited.includes(id)) return "limited";
@@ -303,7 +317,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     return null;
   }
 
-  const detailFrameBg = useMemo(() => getFrameBackground(selectedCard?.frameType), [selectedCard?.frameType]);
+  const detailFrameBg  = useMemo(() => getFrameBackground(selectedCard?.frameType), [selectedCard?.frameType]);
   const detailTypeline = useMemo(() => selectedCard ? formatTypeline(selectedCard) : "", [selectedCard]);
 
   // ── Stat rendering ────────────────────────────────────────────────────────
@@ -469,7 +483,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   const CARD_HEIGHT = 180;
 
   const saveLabel = saveStatus === "saved" ? "Saved ✓" : saveStatus === "error" ? "Error ✕" : "Save";
-  const saveBg = saveStatus === "saved" ? "rgba(76,175,80,0.2)" : saveStatus === "error" ? "rgba(220,50,50,0.2)" : "transparent";
+  const saveBg    = saveStatus === "saved" ? "rgba(76,175,80,0.2)" : saveStatus === "error" ? "rgba(220,50,50,0.2)" : "transparent";
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -545,25 +559,6 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
 
         /* ── Target tabs + search ── */
         .db-topbar-filters { display:flex; align-items:center; gap:8px; }
-        .deck-target-tabs { display:flex; gap:4px; }
-        .deck-tab {
-          padding:5px 12px; border-radius:2px; border:1px solid rgba(200,150,40,0.25);
-          background:transparent; color:rgba(200,150,40,0.5); cursor:pointer;
-          font-family:'Cinzel',serif; font-size:11px; font-weight:600;
-          letter-spacing:0.15em; text-transform:uppercase; transition:all 0.15s;
-        }
-        .deck-tab.active { background:rgba(212,175,55,0.12); border-color:rgba(212,175,55,0.6); color:#f0d060; }
-        .deck-tab:hover:not(.active) { border-color:rgba(212,175,55,0.4); color:rgba(200,150,40,0.75); }
-
-        .ban-format-tabs { display:flex; gap:4px; }
-        .ban-tab {
-          padding:5px 12px; border-radius:2px; border:1px solid rgba(100,160,220,0.25);
-          background:transparent; color:rgba(100,160,220,0.5); cursor:pointer;
-          font-family:'Cinzel',serif; font-size:11px; font-weight:600;
-          letter-spacing:0.15em; text-transform:uppercase; transition:all 0.15s;
-        }
-        .ban-tab.active { background:rgba(100,160,220,0.12); border-color:rgba(100,160,220,0.6); color:#8aadee; }
-        .ban-tab:hover:not(.active) { border-color:rgba(100,160,220,0.4); color:rgba(100,160,220,0.75); }
 
         /* ── Deck panel ── */
         .deck-panel {
@@ -651,17 +646,48 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
           border-color: rgba(100,160,220,0.25);
           background: transparent;
         }
-        .dp-btn-compare:hover { color:#8aadee; border-color:rgba(100,160,220,0.55); background:rgba(100,160,220,0.07); }
-        .dp-btn-compare.active { color:#8aadee; border-color:rgba(100,160,220,0.6); background:rgba(100,160,220,0.12); }
+        .dp-btn-compare:hover        { color:#8aadee; border-color:rgba(100,160,220,0.55); background:rgba(100,160,220,0.07); }
+        .dp-btn-compare.active       { color:#8aadee; border-color:rgba(100,160,220,0.6); background:rgba(100,160,220,0.12); }
 
         .dp-btn-copy {
           color: rgba(200,150,40,0.65);
           border-color: rgba(200,150,40,0.2);
           background: transparent;
         }
-        .dp-btn-copy:hover { color:#f0d060; border-color:rgba(212,175,55,0.55); background:rgba(212,175,55,0.07); }
-        .dp-btn-copy.ok { color:#4caf50; border-color:rgba(76,175,80,0.5);   background:rgba(76,175,80,0.08); }
-        .dp-btn-copy.err { color:#e74c3c; border-color:rgba(231,76,60,0.5);   background:rgba(231,76,60,0.08); }
+        .dp-btn-copy:hover  { color:#f0d060; border-color:rgba(212,175,55,0.55); background:rgba(212,175,55,0.07); }
+        .dp-btn-copy.ok     { color:#4caf50; border-color:rgba(76,175,80,0.5);   background:rgba(76,175,80,0.08); }
+        .dp-btn-copy.err    { color:#e74c3c; border-color:rgba(231,76,60,0.5);   background:rgba(231,76,60,0.08); }
+
+        /* ── Genesys points bar ── */
+        .genesys-bar-wrap {
+          padding: 8px 4px 4px;
+          border-bottom: 1px solid rgba(212,175,55,0.12);
+          margin-bottom: 8px;
+        }
+        .genesys-bar-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 5px;
+          font-family: 'Cinzel', serif;
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.15em;
+          text-transform: uppercase;
+        }
+        .genesys-bar-track {
+          width: 100%;
+          height: 8px;
+          background: rgba(255,255,255,0.06);
+          border-radius: 4px;
+          overflow: hidden;
+          border: 1px solid rgba(255,255,255,0.08);
+        }
+        .genesys-bar-fill {
+          height: 100%;
+          border-radius: 4px;
+          transition: width 0.2s ease, background 0.2s ease;
+        }
       `}</style>
 
       <div className="db-root">
@@ -709,23 +735,28 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
             </button>
           </div>
 
-          {/* Target tabs + ban format + search — pushed to the far right */}
+          {/* Format + target dropdowns + search — pushed to the far right */}
           <div className="db-topbar-filters">
-            <div className="ban-format-tabs">
-              {(["tcg", "ocg", "goat"] as const).map((fmt) => (
-                <button
-                  key={fmt}
-                  className={`ban-tab ${banFormat === fmt ? "active" : ""}`}
-                  onClick={() => setBanFormat(fmt)}
-                >
-                  {fmt.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            <div className="deck-target-tabs">
-              <button className={`deck-tab ${deckTarget === "main" ? "active" : ""}`} onClick={() => setDeckTarget("main")}>Main</button>
-              <button className={`deck-tab ${deckTarget === "side" ? "active" : ""}`} onClick={() => setDeckTarget("side")}>Side</button>
-            </div>
+            <select
+              className="deck-select"
+              value={banFormat}
+              onChange={(e) => setBanFormat(e.target.value as "tcg" | "ocg" | "goat" | "genesys")}
+            >
+              <option value="tcg">TCG</option>
+              <option value="ocg">OCG</option>
+              <option value="goat">GOAT</option>
+              <option value="genesys">Genesys</option>
+            </select>
+
+            <select
+              className="deck-select"
+              value={deckTarget}
+              onChange={(e) => setDeckTarget(e.target.value as DeckTarget)}
+            >
+              <option value="main">→ Main</option>
+              <option value="side">→ Side</option>
+            </select>
+
             <input
               type="text"
               placeholder="Search name..."
@@ -797,10 +828,11 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
                       <div style={{ ...style, display:"flex", gap:10, padding:5 }}>
                         {rowCards.map((c) => {
                           const isSelected = selectedCard?.id === c.id;
-                          const inDeck = deckCountById.get(c.id) ?? 0;
-                          const max = maxCopies(banList, c.id);
-                          const atLimit = inDeck >= max;
-                          const ban = banStatus(c.id);
+                          const inDeck     = deckCountById.get(c.id) ?? 0;
+                          const max        = banFormat === "genesys" ? 3 : maxCopies(banList, c.id);
+                          const atLimit    = inDeck >= max;
+                          const ban        = banFormat === "genesys" ? null : banStatus(c.id);
+                          const pts        = c.genesysPoints ?? 0;
                           return (
                             <div
                               key={`${c.id}-${c.imageId ?? "base"}`}
@@ -821,7 +853,19 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
                                 style={{ display:"block", borderRadius:6 }}
                                 draggable={false}
                               />
-                              {ban && <div className="ban-dot" style={{ background:BAN_COLORS[ban] }} title={ban} />}
+                              {/* In genesys mode show point cost instead of ban dot */}
+                              {banFormat === "genesys" && pts > 0 && (
+                                <div className="ban-dot genesys-pts" title={`${pts} pts`}
+                                  style={{ background:"rgba(0,0,0,0.75)", color:"#f0d060",
+                                    width:"auto", height:"auto", borderRadius:3,
+                                    padding:"1px 4px", fontSize:9, fontWeight:"bold",
+                                    border:"1px solid rgba(240,208,96,0.4)" }}>
+                                  {pts}
+                                </div>
+                              )}
+                              {banFormat !== "genesys" && ban && (
+                                <div className="ban-dot" style={{ background:BAN_COLORS[ban] }} title={ban} />
+                              )}
                               {inDeck > 0 && <div className="deck-in-use">{inDeck}/{max}</div>}
                             </div>
                           );
@@ -844,6 +888,35 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
             {renderDeckSection("Main Deck",  "main",  60)}
             {renderDeckSection("Extra Deck", "extra", 15)}
             {renderDeckSection("Side Deck",  "side",  15)}
+
+            {/* ── Genesys points bar ── */}
+            {banFormat === "genesys" && (() => {
+              const over    = genesysPointsTotal > 100;
+              const fillPct = Math.min(genesysPointsTotal, 100);
+              const barColor = over
+                ? "#e74c3c"
+                : genesysPointsTotal >= 80
+                  ? "#f0a500"
+                  : "rgba(100,180,100,0.8)";
+              const labelColor = over ? "#e74c3c" : "rgba(200,150,40,0.7)";
+              return (
+                <div className="genesys-bar-wrap">
+                  <div className="genesys-bar-header">
+                    <span style={{ color: labelColor }}>Points</span>
+                    <span style={{ color: labelColor, fontSize: 12 }}>
+                      {genesysPointsTotal} / 100
+                      {over && " ⚠ over limit"}
+                    </span>
+                  </div>
+                  <div className="genesys-bar-track">
+                    <div
+                      className="genesys-bar-fill"
+                      style={{ width: `${fillPct}%`, background: barColor }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ── Panel footer ── */}
             <div className="deck-panel-footer">
