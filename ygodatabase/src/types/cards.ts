@@ -7,6 +7,7 @@ export interface CardStub {
   imgPath?: string;       // full-size JPEG
   imgThumbPath?: string;  // small WebP for grid
   frameType?: string;
+  genesysPoints: number;  // 0 = free in Genesys format
   rarities: (string | null)[];
   totalCollectionAmount: number;
   level?: number;

@@ -138,6 +138,13 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     syncAndReload(banFormat);
     refreshDeckList();
     invoke<Record<number, number>>("get_collection_amounts").then(setCollectionAmounts).catch(() => {});
+    // Pre-populate genesys points for all cards that have points > 0
+    invoke<CardStub[]>("load_card_stubs", { sort: "type" }).then((r) => {
+      for (const c of r) {
+        if ((c.genesysPoints ?? 0) > 0)
+          genesysPtsById.current.set(c.id, c.genesysPoints);
+      }
+    }).catch(() => {});
   }, []);
 
   // Re-sync whenever the user switches format
@@ -156,6 +163,11 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     return () => clearTimeout(t);
   }, [searchInput]);
 
+  // ── Persistent genesys points lookup ─────────────────────────────────────
+  // Accumulates genesys_points for every card ever seen, so the total stays
+  // accurate even when the search changes and cards leave the grid.
+  const genesysPtsById = useRef<Map<number, number>>(new Map());
+
   // ── Load card stubs ───────────────────────────────────────────────────────
   const latestReq = useRef(0);
   useEffect(() => {
@@ -163,7 +175,15 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     setCardLoading(true);
     const params = { ...filtersToParams({ ...filters, name: search }), sort: "type" };
     invoke<CardStub[]>("load_card_stubs", params).then((r) => {
-      if (reqId === latestReq.current) { setCards(r); setCardLoading(false); }
+      if (reqId === latestReq.current) {
+        setCards(r);
+        setCardLoading(false);
+        // Accumulate genesys points for every card we've ever seen
+        for (const c of r) {
+          if ((c.genesysPoints ?? 0) > 0)
+            genesysPtsById.current.set(c.id, c.genesysPoints);
+        }
+      }
     }).catch(() => setCardLoading(false));
   }, [search, filters]);
 
@@ -303,11 +323,16 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     return m;
   }, [deck]);
 
-  // Genesys: total points spent across all sections (each copy costs its own points)
+  // Genesys: total points across all deck sections.
+  // Uses the persistent genesysPtsById ref so the total stays correct
+  // even when the search changes and cards scroll off the grid.
   const genesysPointsTotal = useMemo(() => {
     if (banFormat !== "genesys") return 0;
     const allEntries = [...deck.main, ...deck.extra, ...deck.side];
-    return allEntries.reduce((sum, e) => sum + (e.genesysPoints ?? 0), 0);
+    return allEntries.reduce((sum, e) => {
+      const pts = genesysPtsById.current.get(e.id) ?? (e.genesysPoints ?? 0);
+      return sum + pts;
+    }, 0);
   }, [deck, banFormat]);
 
   function banStatus(id: number): "forbidden" | "limited" | "semi" | null {
@@ -460,6 +485,11 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
                 >
                   <img
                     src={(entry.imgThumbPath ?? entry.imgPath)?.replace("asset://", "/")}
+                    onError={(e) => {
+                      const full = entry.imgPath?.replace("asset://", "/");
+                      if (full && (e.target as HTMLImageElement).src !== full)
+                        (e.target as HTMLImageElement).src = full;
+                    }}
                     width={52}
                     style={{ display: "block", borderRadius: 4, opacity: compareMode && missing > 0 ? 0.65 : 1 }}
                     draggable={false}
@@ -603,6 +633,18 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
           position:absolute; top:4px; right:4px;
           width:9px; height:9px; border-radius:50%;
           border:1px solid rgba(0,0,0,0.5);
+        }
+
+        .genesys-pts-badge {
+          position:absolute; top:4px; right:4px;
+          background:rgba(0,0,0,0.82);
+          color:#f0d060;
+          font-size:9px; font-weight:bold;
+          padding:1px 4px;
+          border-radius:3px;
+          border:1px solid rgba(240,208,96,0.45);
+          line-height:1.5;
+          white-space:nowrap;
         }
         .deck-in-use {
           position:absolute; top:4px; left:4px;
@@ -849,17 +891,20 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
                             >
                               <img
                                 src={(c.imgThumbPath ?? c.imgPath)?.replace("asset://", "/")}
+                                onError={(e) => {
+                                  // WebP thumbnail missing → fall back to full JPEG
+                                  const full = c.imgPath?.replace("asset://", "/");
+                                  if (full && (e.target as HTMLImageElement).src !== full) {
+                                    (e.target as HTMLImageElement).src = full;
+                                  }
+                                }}
                                 width={120} loading="lazy"
                                 style={{ display:"block", borderRadius:6 }}
                                 draggable={false}
                               />
                               {/* In genesys mode show point cost instead of ban dot */}
                               {banFormat === "genesys" && pts > 0 && (
-                                <div className="ban-dot genesys-pts" title={`${pts} pts`}
-                                  style={{ background:"rgba(0,0,0,0.75)", color:"#f0d060",
-                                    width:"auto", height:"auto", borderRadius:3,
-                                    padding:"1px 4px", fontSize:9, fontWeight:"bold",
-                                    border:"1px solid rgba(240,208,96,0.4)" }}>
+                                <div className="genesys-pts-badge" title={`${pts} pts`}>
                                   {pts}
                                 </div>
                               )}
@@ -890,33 +935,32 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
             {renderDeckSection("Side Deck",  "side",  15)}
 
             {/* ── Genesys points bar ── */}
-            {banFormat === "genesys" && (() => {
-              const over    = genesysPointsTotal > 100;
-              const fillPct = Math.min(genesysPointsTotal, 100);
-              const barColor = over
-                ? "#e74c3c"
-                : genesysPointsTotal >= 80
-                  ? "#f0a500"
-                  : "rgba(100,180,100,0.8)";
-              const labelColor = over ? "#e74c3c" : "rgba(200,150,40,0.7)";
-              return (
-                <div className="genesys-bar-wrap">
-                  <div className="genesys-bar-header">
-                    <span style={{ color: labelColor }}>Points</span>
-                    <span style={{ color: labelColor, fontSize: 12 }}>
-                      {genesysPointsTotal} / 100
-                      {over && " ⚠ over limit"}
-                    </span>
-                  </div>
-                  <div className="genesys-bar-track">
-                    <div
-                      className="genesys-bar-fill"
-                      style={{ width: `${fillPct}%`, background: barColor }}
-                    />
-                  </div>
+            {banFormat === "genesys" && (
+              <div className="genesys-bar-wrap">
+                <div className="genesys-bar-header">
+                  <span style={{ color: genesysPointsTotal > 100 ? "#e74c3c" : "rgba(200,150,40,0.7)" }}>
+                    Points
+                  </span>
+                  <span style={{ color: genesysPointsTotal > 100 ? "#e74c3c" : "rgba(200,150,40,0.7)", fontSize: 12 }}>
+                    {genesysPointsTotal} / 100
+                    {genesysPointsTotal > 100 && " ⚠ over limit"}
+                  </span>
                 </div>
-              );
-            })()}
+                <div className="genesys-bar-track">
+                  <div
+                    className="genesys-bar-fill"
+                    style={{
+                      width: `${Math.min(genesysPointsTotal, 100)}%`,
+                      background: genesysPointsTotal > 100
+                        ? "#e74c3c"
+                        : genesysPointsTotal >= 80
+                          ? "#f0a500"
+                          : "rgba(100,180,100,0.8)",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* ── Panel footer ── */}
             <div className="deck-panel-footer">
