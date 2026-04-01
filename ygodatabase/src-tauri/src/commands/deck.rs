@@ -281,6 +281,32 @@ pub fn sync_banlist_from_db(format: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Returns a map of card_id → genesys_points for every card with points > 0.
+/// Cards with 0 or NULL points are omitted (treat missing as 0).
+/// This is loaded once on DeckBuilder mount, mirroring how the ban list works.
+#[tauri::command]
+pub fn get_genesys_points() -> Result<std::collections::HashMap<i64, i64>, String> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, genesys_points
+             FROM cards
+             WHERE genesys_points IS NOT NULL AND genesys_points > 0",
+        )
+        .map_err(|e| e.to_string())?;
+ 
+    let rows = stmt
+        .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))
+        .map_err(|e| e.to_string())?;
+ 
+    let mut map = std::collections::HashMap::new();
+    for r in rows {
+        let (id, pts) = r.map_err(|e| e.to_string())?;
+        map.insert(id, pts);
+    }
+    Ok(map)
+}
+
 /// Loads a saved .ydk file and resolves card IDs to full DeckStub objects.
 #[tauri::command]
 pub fn load_deck(name: String) -> Result<LoadedDeck, String> {

@@ -7,12 +7,14 @@ use rusqlite::Connection;
 use commands::collection::{
     get_all_sets,
     get_all_archetypes,
+    
     load_card_detail,
     load_card_stubs,
     update_collection_amount,
 };
 use commands::deck::{
     get_ban_list,
+    get_genesys_points,
     get_collection_amounts,
     sync_banlist_from_db,
     list_decks,
@@ -46,6 +48,7 @@ fn main() {
             load_card_detail,
             get_all_sets,
             get_all_archetypes,
+            get_genesys_points,
             update_collection_amount,
             get_ban_list,
             get_collection_amounts,

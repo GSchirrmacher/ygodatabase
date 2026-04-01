@@ -111,9 +111,12 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
 
   // ── Collection comparison ─────────────────────────────────────────────────
-  // Map of card_id → total copies owned across the whole collection
   const [collectionAmounts, setCollectionAmounts] = useState<Record<number, number>>({});
   const [compareMode, setCompareMode] = useState(false);
+
+  // ── Genesys points: card_id → points, loaded once, always available ───────
+  // Same pattern as banList — one fetch on mount, in state, never stale.
+  const [genesysPts, setGenesysPts] = useState<Record<number, number>>({});
 
   // ── Drag ─────────────────────────────────────────────────────────────────
   const dragStub = useRef<CardStub | null>(null);
@@ -138,13 +141,8 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     syncAndReload(banFormat);
     refreshDeckList();
     invoke<Record<number, number>>("get_collection_amounts").then(setCollectionAmounts).catch(() => {});
-    // Pre-populate genesys points for all cards that have points > 0
-    invoke<CardStub[]>("load_card_stubs", { sort: "type" }).then((r) => {
-      for (const c of r) {
-        if ((c.genesysPoints ?? 0) > 0)
-          genesysPtsById.current.set(c.id, c.genesysPoints);
-      }
-    }).catch(() => {});
+    // Load genesys points map once — exactly like the ban list
+    invoke<Record<number, number>>("get_genesys_points").then(setGenesysPts).catch(() => {});
   }, []);
 
   // Re-sync whenever the user switches format
@@ -163,11 +161,6 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  // ── Persistent genesys points lookup ─────────────────────────────────────
-  // Accumulates genesys_points for every card ever seen, so the total stays
-  // accurate even when the search changes and cards leave the grid.
-  const genesysPtsById = useRef<Map<number, number>>(new Map());
-
   // ── Load card stubs ───────────────────────────────────────────────────────
   const latestReq = useRef(0);
   useEffect(() => {
@@ -175,15 +168,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     setCardLoading(true);
     const params = { ...filtersToParams({ ...filters, name: search }), sort: "type" };
     invoke<CardStub[]>("load_card_stubs", params).then((r) => {
-      if (reqId === latestReq.current) {
-        setCards(r);
-        setCardLoading(false);
-        // Accumulate genesys points for every card we've ever seen
-        for (const c of r) {
-          if ((c.genesysPoints ?? 0) > 0)
-            genesysPtsById.current.set(c.id, c.genesysPoints);
-        }
-      }
+      if (reqId === latestReq.current) { setCards(r); setCardLoading(false); }
     }).catch(() => setCardLoading(false));
   }, [search, filters]);
 
@@ -324,16 +309,13 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   }, [deck]);
 
   // Genesys: total points across all deck sections.
-  // Uses the persistent genesysPtsById ref so the total stays correct
-  // even when the search changes and cards scroll off the grid.
+  // genesysPts is loaded once on mount from get_genesys_points — same pattern
+  // as banList. Always accurate regardless of current search.
   const genesysPointsTotal = useMemo(() => {
     if (banFormat !== "genesys") return 0;
     const allEntries = [...deck.main, ...deck.extra, ...deck.side];
-    return allEntries.reduce((sum, e) => {
-      const pts = genesysPtsById.current.get(e.id) ?? (e.genesysPoints ?? 0);
-      return sum + pts;
-    }, 0);
-  }, [deck, banFormat]);
+    return allEntries.reduce((sum, e) => sum + (genesysPts[e.id] ?? 0), 0);
+  }, [deck, banFormat, genesysPts]);
 
   function banStatus(id: number): "forbidden" | "limited" | "semi" | null {
     if (banList.forbidden.includes(id)) return "forbidden";
@@ -874,7 +856,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
                           const max        = banFormat === "genesys" ? 3 : maxCopies(banList, c.id);
                           const atLimit    = inDeck >= max;
                           const ban        = banFormat === "genesys" ? null : banStatus(c.id);
-                          const pts        = c.genesysPoints ?? 0;
+                          const pts        = genesysPts[c.id] ?? 0;
                           return (
                             <div
                               key={`${c.id}-${c.imageId ?? "base"}`}
