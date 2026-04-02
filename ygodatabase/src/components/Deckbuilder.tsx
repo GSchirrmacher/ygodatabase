@@ -125,10 +125,13 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   // Syncs banlist.json from the DB for the active format, then reloads it.
   async function syncAndReload(fmt: "tcg" | "ocg" | "goat" | "genesys") {
     if (fmt === "genesys") {
-      // Genesys uses points, not a ban list — clear the ban list so no restrictions apply
       setBanList({ forbidden: [], limited: [], semiLimited: [] });
+      // Clear ban status filter, it doesn't apply in genesys
+      setFilters((f) => ({ ...f, banStatus: null }));
       return;
     }
+    // Switching away from genesys — clear genesys point range filters
+    setFilters((f) => ({ ...f, genesysPointsMin: "", genesysPointsMax: "" }));
     try {
       await invoke("sync_banlist_from_db", { format: fmt });
     } catch (err) {
@@ -828,6 +831,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
           onChange={(f) => setFilters(f)}
           resultCount={cards.length}
           loading={cardLoading}
+          banFormat={banFormat}
         />
 
         {/* ── MAIN CONTENT ── */}

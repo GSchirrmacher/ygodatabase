@@ -11,7 +11,9 @@ export interface CardFilters {
   atk: string;
   def: string;
   banStatus: string | null;
-  archetype: string;   // free-text exact match against JSON array
+  archetype: string;
+  genesysPointsMin: string;  // min cost filter (genesys format)
+  genesysPointsMax: string;  // max cost filter (genesys format)   // free-text exact match against JSON array
 }
 
 export const EMPTY_FILTERS: CardFilters = {
@@ -26,6 +28,8 @@ export const EMPTY_FILTERS: CardFilters = {
   def: "",
   banStatus: null,
   archetype: "",
+  genesysPointsMin: "",
+  genesysPointsMax: "",
 };
 
 // ── Static option lists ─────────────────────────────────────────────────────

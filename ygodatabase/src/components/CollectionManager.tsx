@@ -19,11 +19,13 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
   const [selectedCard, setSelectedCard] = useState<CardDetail | null>(null);
   const [collectionOnly, setCollectionOnly] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [collectionValue, setCollectionValue] = useState<number>(0);
   const gridRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState(0);
 
   useEffect(() => {
     invoke<string[]>("get_all_sets").then(setSets);
+    invoke<number>("get_collection_value").then(setCollectionValue).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -87,6 +89,8 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
       console.error("Failed to update collection amount:", err);
       return;
     }
+    // Refresh total value after any collection change
+    invoke<number>("get_collection_value").then(setCollectionValue).catch(() => {});
     setSelectedCard((prev) => {
       if (!prev) return prev;
       return {
@@ -286,6 +290,37 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
               {collectionOnly ? "My Collection ✓" : "My Collection"}
             </button>
           </div>
+        </div>
+
+        {/* ── COLLECTION VALUE BAR ── */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          padding: "8px 20px",
+          borderBottom: "1px solid rgba(212,175,55,0.12)",
+          background: "rgba(0,0,0,0.08)",
+          flexShrink: 0,
+        }}>
+          <span style={{
+            fontFamily: "'Cinzel', serif",
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+            color: "rgba(200,150,40,0.55)",
+          }}>
+            Collection Value
+          </span>
+          <span style={{
+            fontFamily: "'Cinzel', serif",
+            fontSize: 15,
+            fontWeight: 600,
+            color: collectionValue > 0 ? "#4caf50" : "rgba(200,150,40,0.3)",
+            letterSpacing: "0.05em",
+          }}>
+            ${collectionValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
         </div>
 
         {/* ── MAIN CONTENT: grid + detail pane ── */}

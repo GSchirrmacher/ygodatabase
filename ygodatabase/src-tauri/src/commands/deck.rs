@@ -161,6 +161,27 @@ pub fn get_collection_amounts() -> Result<std::collections::HashMap<i64, i64>, S
     Ok(map)
 }
 
+/// Returns the total monetary value of the collection.
+/// Computed as SUM(CAST(set_price AS REAL) * collection_amount) across all
+/// owned rows. set_price is stored as TEXT in the DB, so we cast it here.
+/// Returns 0.0 if nothing is owned or no prices are set.
+#[tauri::command]
+pub fn get_collection_value() -> Result<f64, String> {
+    let conn = open_db()?;
+    let value: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(CAST(set_price AS REAL) * collection_amount), 0.0)
+             FROM card_sets
+             WHERE collection_amount > 0
+               AND set_price IS NOT NULL
+               AND CAST(set_price AS REAL) > 0",
+            [],
+            |row| row.get::<_, f64>(0),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(value)
+}
+
 
 #[tauri::command]
 pub fn list_decks() -> Result<Vec<String>, String> {

@@ -20,8 +20,10 @@ pub fn load_card_stubs(
     atk: Option<i64>,
     def: Option<i64>,
     ban_status: Option<String>,
-    archetype: Option<String>,   // exact archetype name, matched inside JSON array
-    sort: Option<String>,   // "set" | "type" (default "type")
+    archetype: Option<String>,
+    genesys_points_min: Option<i64>,   // inclusive lower bound (genesys format)
+    genesys_points_max: Option<i64>,   // inclusive upper bound (genesys format)
+    sort: Option<String>,
 ) -> Result<Vec<CardStub>, String> {
     let conn = open_db()?;
 
@@ -119,6 +121,8 @@ pub fn load_card_stubs(
                     WHERE LOWER(value) = LOWER(:archetype)
                 )
               ))
+          AND (:genesys_points_min IS NULL OR COALESCE(c.genesys_points, 0) >= :genesys_points_min)
+          AND (:genesys_points_max IS NULL OR COALESCE(c.genesys_points, 0) <= :genesys_points_max)
         {order_clause}
     ");
 
@@ -135,6 +139,8 @@ pub fn load_card_stubs(
         ":def": def,
         ":ban_status": ban_status.as_ref(),
         ":archetype": archetype.as_ref(),
+        ":genesys_points_min": genesys_points_min,
+        ":genesys_points_max": genesys_points_max,
     };
 
     let rows = stmt
@@ -257,7 +263,9 @@ pub fn load_card_detail(card_id: i64, set_name: Option<String>) -> Result<CardDe
                     .get::<_, Option<String>>("typeline")?
                     .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok()),
                 collection_amount: row.get("collection_amount").ok(),
-                set_price: row.get("set_price").ok(),
+                set_price: row.get::<_, Option<String>>("set_price").ok().flatten()
+                    .and_then(|s| s.parse::<f64>().ok())
+                    .filter(|&v| v > 0.0),
             })
         })
         .map_err(|e| e.to_string())?;

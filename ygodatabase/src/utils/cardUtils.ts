@@ -19,6 +19,8 @@ export function filtersToParams(f: CardFilters): Record<string, string | number>
   if (f.def.trim()) p.def = parseInt(f.def, 10);
   if (f.banStatus) p.banStatus = f.banStatus;
   if (f.archetype.trim()) p.archetype = f.archetype.trim();
+  if (f.genesysPointsMin.trim()) p.genesysPointsMin = parseInt(f.genesysPointsMin, 10);
+  if (f.genesysPointsMax.trim()) p.genesysPointsMax = parseInt(f.genesysPointsMax, 10);
   return p;
 }
 

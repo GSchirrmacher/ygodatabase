@@ -13,11 +13,12 @@ import {
 interface CardFiltersProps {
   filters: CardFilters;
   onChange: (f: CardFilters) => void;
-  resultCount: number;   // passed in so the bar can show "0 results" feedback
+  resultCount: number;
   loading: boolean;
+  banFormat?: string;  // "tcg" | "ocg" | "goat" | "genesys"
 }
 
-export default function CardFilters({ filters, onChange, resultCount, loading }: CardFiltersProps) {
+export default function CardFilters({ filters, onChange, resultCount, loading, banFormat }: CardFiltersProps) {
   const cat = filters.category;
 
   // Load archetype list from DB once on mount
@@ -56,6 +57,7 @@ export default function CardFilters({ filters, onChange, resultCount, loading }:
     if (val === "" || /^\d+$/.test(val)) set({ [key]: val });
   }
 
+  const isGenesys = banFormat === "genesys";
   const isMonster = cat === "monster";
   const showSub = isMonster;                                         // subcategory picker
   const showAttr = isMonster;
@@ -74,6 +76,8 @@ export default function CardFilters({ filters, onChange, resultCount, loading }:
     filters.level || null, filters.scale || null,
     filters.atk || null, filters.def || null, filters.banStatus,
     filters.archetype || null,
+    filters.genesysPointsMin || null,
+    filters.genesysPointsMax || null,
   ].filter(Boolean).length;
 
   const hasFilters = activeCount > 0;
@@ -292,20 +296,41 @@ export default function CardFilters({ filters, onChange, resultCount, loading }:
 
         <div className="cf-divider" />
 
-        {/* Ban status */}
-        <div className="cf-group">
-          <span className="cf-label">Limit</span>
-          <select
-            className="cf-select"
-            value={filters.banStatus ?? ""}
-            onChange={(e) => set({ banStatus: e.target.value || null })}
-          >
-            <option value="">Any</option>
-            {BAN_STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
+        {/* Genesys: min/max points range OR ban status for other formats */}
+        {isGenesys ? (
+          <div className="cf-group">
+            <span className="cf-label">Pts</span>
+            <input
+              className="cf-input"
+              style={{ width: 52 }}
+              placeholder="Min"
+              value={filters.genesysPointsMin}
+              onChange={(e) => { if (e.target.value === "" || /^\d+$/.test(e.target.value)) set({ genesysPointsMin: e.target.value }); }}
+            />
+            <span style={{ color: "rgba(200,150,40,0.4)", fontSize: 11 }}>–</span>
+            <input
+              className="cf-input"
+              style={{ width: 52 }}
+              placeholder="Max"
+              value={filters.genesysPointsMax}
+              onChange={(e) => { if (e.target.value === "" || /^\d+$/.test(e.target.value)) set({ genesysPointsMax: e.target.value }); }}
+            />
+          </div>
+        ) : (
+          <div className="cf-group">
+            <span className="cf-label">Limit</span>
+            <select
+              className="cf-select"
+              value={filters.banStatus ?? ""}
+              onChange={(e) => set({ banStatus: e.target.value || null })}
+            >
+              <option value="">Any</option>
+              {BAN_STATUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Clear */}
         {hasFilters && (
