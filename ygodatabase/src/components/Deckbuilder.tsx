@@ -450,19 +450,31 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
             {grouped.map(({ entry, count }) => {
               const owned   = collectionAmounts[entry.id] ?? 0;
               const missing = compareMode ? Math.max(0, count - owned) : 0;
-              // badge: compare mode → "owned/inDeck", normal → "×N" when >1
+              const pts     = genesysPts[entry.id] ?? 0;
+              const totalPts = pts * count; // total cost of all copies of this card
+
               const badgeText = compareMode
                 ? `${owned}/${count}`
                 : count > 1 ? `×${count}` : null;
-              // colour: red when missing any, green when fully covered, gold default
               const badgeColor = compareMode
                 ? (missing > 0 ? "#e74c3c" : "#4caf50")
                 : "#f0d060";
+
+              // Build tooltip
+              let tooltipParts = [entry.name];
+              if (banFormat === "genesys" && pts > 0)
+                tooltipParts.push(`${pts}pts${count > 1 ? ` × ${count} = ${totalPts}pts` : ""}`);
+              if (compareMode)
+                tooltipParts.push(`owned: ${owned}, in deck: ${count}`);
+              else if (count > 1)
+                tooltipParts.push(`×${count}`);
+              tooltipParts.push("right-click to remove");
+
               return (
                 <div
                   key={entry.id}
                   className="deck-card-thumb"
-                  title={`${entry.name}${compareMode ? ` — owned: ${owned}, in deck: ${count}` : count > 1 ? ` ×${count}` : ""} — right-click to remove`}
+                  title={tooltipParts.join(" — ")}
                   onContextMenu={(e) => { e.preventDefault(); removeOneFromSection(entry.id, section); }}
                 >
                   <img
@@ -476,6 +488,13 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
                     style={{ display: "block", borderRadius: 4, opacity: compareMode && missing > 0 ? 0.65 : 1 }}
                     draggable={false}
                   />
+                  {/* Genesys points badge — top-right */}
+                  {banFormat === "genesys" && pts > 0 && (
+                    <div className="genesys-pts-thumb">
+                      {pts}
+                    </div>
+                  )}
+                  {/* Count / compare badge — bottom-right */}
                   {badgeText && (
                     <div className="deck-card-count" style={{ color: badgeColor }}>
                       {badgeText}
@@ -626,6 +645,19 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
           border-radius:3px;
           border:1px solid rgba(240,208,96,0.45);
           line-height:1.5;
+          white-space:nowrap;
+        }
+
+        /* Smaller variant for 52px deck panel thumbnails */
+        .genesys-pts-thumb {
+          position:absolute; top:2px; right:2px;
+          background:rgba(0,0,0,0.82);
+          color:#f0d060;
+          font-size:8px; font-weight:bold;
+          padding:1px 3px;
+          border-radius:2px;
+          border:1px solid rgba(240,208,96,0.4);
+          line-height:1.4;
           white-space:nowrap;
         }
         .deck-in-use {
@@ -852,11 +884,11 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
                       <div style={{ ...style, display:"flex", gap:10, padding:5 }}>
                         {rowCards.map((c) => {
                           const isSelected = selectedCard?.id === c.id;
-                          const inDeck     = deckCountById.get(c.id) ?? 0;
-                          const max        = banFormat === "genesys" ? 3 : maxCopies(banList, c.id);
-                          const atLimit    = inDeck >= max;
-                          const ban        = banFormat === "genesys" ? null : banStatus(c.id);
-                          const pts        = genesysPts[c.id] ?? 0;
+                          const inDeck = deckCountById.get(c.id) ?? 0;
+                          const max = banFormat === "genesys" ? 3 : maxCopies(banList, c.id);
+                          const atLimit = inDeck >= max;
+                          const ban = banFormat === "genesys" ? null : banStatus(c.id);
+                          const pts = genesysPts[c.id] ?? 0;
                           return (
                             <div
                               key={`${c.id}-${c.imageId ?? "base"}`}

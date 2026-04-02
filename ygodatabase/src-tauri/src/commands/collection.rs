@@ -43,7 +43,7 @@ pub fn load_card_stubs(
                 format!("AND c.frameType IN ({})", list)
             }
             "spell" => "AND c.frameType = 'spell'".to_string(),
-            "trap" => "AND c.frameType = 'trap'".to_string(),
+            "trap"  => "AND c.frameType = 'trap'".to_string(),
             _       => String::new(),
         }
     } else {
@@ -95,14 +95,15 @@ pub fn load_card_stubs(
             cs.set_rarity,
             cs.collection_amount,
             c.level,
-            cs.set_code
+            cs.set_code,
+            COALESCE(c.genesys_points, 0) as genesys_points
         FROM cards c
         LEFT JOIN card_images ci ON c.id = ci.card_id
         LEFT JOIN card_sets cs ON c.id = cs.card_id
         WHERE (:name IS NULL OR c.name LIKE :name)
           AND (:set IS NULL OR cs.set_name = :set)
           {frame_clause}
-          AND (:attribute  IS NULL OR c.attribute  = :attribute)
+          AND (:attribute  IS NULL OR c.attribute = :attribute)
           AND (:race IS NULL OR c.race = :race)
           AND (:level IS NULL OR c.level = :level)
           AND (:scale IS NULL OR c.scale = :scale)
@@ -150,6 +151,7 @@ pub fn load_card_stubs(
                 collection_amount: row.get("collection_amount").ok(),
                 level: row.get("level").ok(),
                 set_code: row.get("set_code").ok(),
+                genesys_points: row.get("genesys_points").unwrap_or(0),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -179,6 +181,7 @@ pub fn load_card_stubs(
                 total_collection_amount: 0,
                 level: r.level,
                 set_code: r.set_code.clone(),
+                genesys_points: r.genesys_points,
             });
         }
         let stub = map.get_mut(&r.id).unwrap();

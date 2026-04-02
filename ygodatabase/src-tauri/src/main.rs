@@ -7,7 +7,6 @@ use rusqlite::Connection;
 use commands::collection::{
     get_all_sets,
     get_all_archetypes,
-    
     load_card_detail,
     load_card_stubs,
     update_collection_amount,
@@ -27,7 +26,6 @@ use commands::deck::{
 // TODO : Fix slow loading times
 // TODO : Add other formats
 // TODO : UI stuff
-
 
 #[tauri::command]
 fn exit_app(app: tauri::AppHandle) {

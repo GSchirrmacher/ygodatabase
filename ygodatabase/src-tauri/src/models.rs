@@ -31,6 +31,7 @@ pub struct CardStub {
     pub total_collection_amount: i64,
     pub level: Option<i64>,
     pub set_code: Option<String>,
+    pub genesys_points: i64,
 }
 
 #[derive(Serialize)]
@@ -72,6 +73,7 @@ pub struct RawStubRow {
     pub collection_amount: Option<i64>,
     pub level: Option<i64>,
     pub set_code: Option<String>,
+    pub genesys_points: i64,
 }
 
 #[derive(Debug)]
