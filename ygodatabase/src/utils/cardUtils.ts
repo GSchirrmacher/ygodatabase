@@ -4,11 +4,9 @@ import type { CardDetail } from "../types/cards";
 import type { CardFilters } from "../types/filters";
 
 /** Converts a CardFilters object into the params record expected by load_card_stubs. */
-export function filtersToParams(f: CardFilters): Record<string, string | number> {
+export function filtersToParams(f: CardFilters, format?: string): Record<string, string | number> {
   const p: Record<string, string | number> = {};
   if (f.name.trim())   p.name      = f.name.trim();
-  // category is the broad bucket; frameType is the specific subcategory
-  // the backend handles the IN-clause expansion for "monster"
   if (f.category) p.category = f.category;
   if (f.frameType) p.frameType = f.frameType;
   if (f.attribute) p.attribute = f.attribute;
@@ -21,6 +19,7 @@ export function filtersToParams(f: CardFilters): Record<string, string | number>
   if (f.archetype.trim()) p.archetype = f.archetype.trim();
   if (f.genesysPointsMin.trim()) p.genesysPointsMin = parseInt(f.genesysPointsMin, 10);
   if (f.genesysPointsMax.trim()) p.genesysPointsMax = parseInt(f.genesysPointsMax, 10);
+  if (format) p.format = format;
   return p;
 }
 

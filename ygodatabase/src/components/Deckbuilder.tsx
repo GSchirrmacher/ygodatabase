@@ -102,7 +102,8 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   const [deck, setDeck] = useState<Deck>({ main: [], extra: [], side: [] });
   const [deckTarget, setDeckTarget] = useState<DeckTarget>("main");
   const [banList, setBanList] = useState<BanList>({ forbidden: [], limited: [], semiLimited: [] });
-  const [banFormat, setBanFormat] = useState<"tcg" | "ocg" | "goat" | "genesys">("tcg");
+  const [banFormat, setBanFormat] = useState<string>("TCG");
+  const [formatList] = useState<string[]>(["TCG", "OCG", "Master Duel", "GOAT", "OCG GOAT", "Edison", "Common Charity", "Duel Links", "Genesys"]);
   const [collapsed, setCollapsed] = useState({ main: false, extra: false, side: false });
 
   // ── Save / load ───────────────────────────────────────────────────────────
@@ -123,14 +124,12 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
 
   // ── Bootstrap + format switch ────────────────────────────────────────────
   // Syncs banlist.json from the DB for the active format, then reloads it.
-  async function syncAndReload(fmt: "tcg" | "ocg" | "goat" | "genesys") {
-    if (fmt === "genesys") {
+  async function syncAndReload(fmt: string) {
+    if (fmt === "Genesys") {
       setBanList({ forbidden: [], limited: [], semiLimited: [] });
-      // Clear ban status filter, it doesn't apply in genesys
       setFilters((f) => ({ ...f, banStatus: null }));
       return;
     }
-    // Switching away from genesys — clear genesys point range filters
     setFilters((f) => ({ ...f, genesysPointsMin: "", genesysPointsMax: "" }));
     try {
       await invoke("sync_banlist_from_db", { format: fmt });
@@ -148,7 +147,6 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     invoke<Record<number, number>>("get_genesys_points").then(setGenesysPts).catch(() => {});
   }, []);
 
-  // Re-sync whenever the user switches format
   useEffect(() => {
     syncAndReload(banFormat);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -169,7 +167,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   useEffect(() => {
     const reqId = ++latestReq.current;
     setCardLoading(true);
-    const params = { ...filtersToParams({ ...filters, name: search }), sort: "type" };
+    const params = { ...filtersToParams({ ...filters, name: search }, banFormat === "Genesys" ? undefined : banFormat), sort: "type" };
     invoke<CardStub[]>("load_card_stubs", params).then((r) => {
       if (reqId === latestReq.current) { setCards(r); setCardLoading(false); }
     }).catch(() => setCardLoading(false));
@@ -315,7 +313,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   // genesysPts is loaded once on mount from get_genesys_points — same pattern
   // as banList. Always accurate regardless of current search.
   const genesysPointsTotal = useMemo(() => {
-    if (banFormat !== "genesys") return 0;
+    if (banFormat !== "Genesys") return 0;
     const allEntries = [...deck.main, ...deck.extra, ...deck.side];
     return allEntries.reduce((sum, e) => sum + (genesysPts[e.id] ?? 0), 0);
   }, [deck, banFormat, genesysPts]);
@@ -465,7 +463,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
 
               // Build tooltip
               let tooltipParts = [entry.name];
-              if (banFormat === "genesys" && pts > 0)
+              if (banFormat === "Genesys" && pts > 0)
                 tooltipParts.push(`${pts}pts${count > 1 ? ` × ${count} = ${totalPts}pts` : ""}`);
               if (compareMode)
                 tooltipParts.push(`owned: ${owned}, in deck: ${count}`);
@@ -492,7 +490,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
                     draggable={false}
                   />
                   {/* Genesys points badge — top-right */}
-                  {banFormat === "genesys" && pts > 0 && (
+                  {banFormat === "Genesys" && pts > 0 && (
                     <div className="genesys-pts-thumb">
                       {pts}
                     </div>
@@ -799,12 +797,11 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
             <select
               className="deck-select"
               value={banFormat}
-              onChange={(e) => setBanFormat(e.target.value as "tcg" | "ocg" | "goat" | "genesys")}
+              onChange={(e) => setBanFormat(e.target.value)}
             >
-              <option value="tcg">TCG</option>
-              <option value="ocg">OCG</option>
-              <option value="goat">GOAT</option>
-              <option value="genesys">Genesys</option>
+              {formatList.map((f) => (
+                <option key={f} value={f}>{f}</option>
+              ))}
             </select>
 
             <select
@@ -889,9 +886,9 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
                         {rowCards.map((c) => {
                           const isSelected = selectedCard?.id === c.id;
                           const inDeck = deckCountById.get(c.id) ?? 0;
-                          const max = banFormat === "genesys" ? 3 : maxCopies(banList, c.id);
+                          const max = banFormat === "Genesys" ? 3 : maxCopies(banList, c.id);
                           const atLimit = inDeck >= max;
-                          const ban = banFormat === "genesys" ? null : banStatus(c.id);
+                          const ban = banFormat === "Genesys" ? null : banStatus(c.id);
                           const pts = genesysPts[c.id] ?? 0;
                           return (
                             <div
@@ -921,12 +918,12 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
                                 draggable={false}
                               />
                               {/* In genesys mode show point cost instead of ban dot */}
-                              {banFormat === "genesys" && pts > 0 && (
+                              {banFormat === "Genesys" && pts > 0 && (
                                 <div className="genesys-pts-badge" title={`${pts} pts`}>
                                   {pts}
                                 </div>
                               )}
-                              {banFormat !== "genesys" && ban && (
+                              {banFormat !== "Genesys" && ban && (
                                 <div className="ban-dot" style={{ background:BAN_COLORS[ban] }} title={ban} />
                               )}
                               {inDeck > 0 && <div className="deck-in-use">{inDeck}/{max}</div>}
@@ -953,7 +950,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
             {renderDeckSection("Side Deck",  "side",  15)}
 
             {/* ── Genesys points bar ── */}
-            {banFormat === "genesys" && (
+            {banFormat === "Genesys" && (
               <div className="genesys-bar-wrap">
                 <div className="genesys-bar-header">
                   <span style={{ color: genesysPointsTotal > 100 ? "#e74c3c" : "rgba(200,150,40,0.7)" }}>

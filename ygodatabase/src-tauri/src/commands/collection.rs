@@ -21,13 +21,41 @@ pub fn load_card_stubs(
     def: Option<i64>,
     ban_status: Option<String>,
     archetype: Option<String>,
-    genesys_points_min: Option<i64>,   // inclusive lower bound (genesys format)
-    genesys_points_max: Option<i64>,   // inclusive upper bound (genesys format)
+    genesys_points_min: Option<i64>,
+    genesys_points_max: Option<i64>,
+    format: Option<String>,    // active format for card pool + ban key filtering
     sort: Option<String>,
 ) -> Result<Vec<CardStub>, String> {
     let conn = open_db()?;
 
-    // Monster frame types for category="monster" IN-clause
+    // Map format name → ban_info JSON key
+    let ban_key = match format.as_deref().unwrap_or("") {
+        "TCG"            => "ban_tcg",
+        "OCG"            => "ban_ocg",
+        "Master Duel"    => "ban_ocg",
+        "GOAT"           => "ban_goat",
+        "OCG GOAT"       => "ban_goat",
+        "Edison"         => "ban_tcg",
+        "Common Charity" => "ban_tcg",
+        "Duel Links"     => "ban_tcg",
+        _                => "ban_tcg", // default / genesys (ban_status unused for genesys)
+    };
+
+    // Card pool filter: when a non-genesys format is active, restrict to cards
+    // that exist in that format's card pool (formats column is a JSON array).
+    let pool_clause = if let Some(ref fmt) = format {
+        if fmt != "Genesys" {
+            format!("AND c.formats IS NOT NULL AND c.formats LIKE '%{}%'",
+                fmt.replace('\'', "''"))
+        } else {
+            String::new() // Genesys uses the full card pool
+        }
+    } else {
+        String::new()
+    };
+
+    // Ban status clause uses the correct key for the active format
+    let ban_key_path = format!("$.{}", ban_key);
     const MONSTER_FRAMES: &[&str] = &[
         "normal", "effect", "ritual", "fusion", "synchro", "xyz", "link",
         "normal_pendulum", "effect_pendulum", "ritual_pendulum",
@@ -105,6 +133,7 @@ pub fn load_card_stubs(
         WHERE (:name IS NULL OR c.name LIKE :name)
           AND (:set IS NULL OR cs.set_name = :set)
           {frame_clause}
+          {pool_clause}
           AND (:attribute  IS NULL OR c.attribute = :attribute)
           AND (:race IS NULL OR c.race = :race)
           AND (:level IS NULL OR c.level = :level)
@@ -112,7 +141,7 @@ pub fn load_card_stubs(
           AND (:atk IS NULL OR c.atk = :atk)
           AND (:def IS NULL OR c.def = :def)
           AND (:ban_status IS NULL OR (
-                LOWER(json_extract(c.banlist_info, '$.ban_tcg')) = LOWER(:ban_status)
+                LOWER(json_extract(c.banlist_info, '{ban_key_path}')) = LOWER(:ban_status)
               ))
           AND (:archetype IS NULL OR (
                 c.archetype IS NOT NULL AND

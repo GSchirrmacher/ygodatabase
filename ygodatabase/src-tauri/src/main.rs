@@ -25,7 +25,6 @@ use commands::deck::{
 
 // TODO : Fix alt arts in database
 // TODO : Fix slow loading times
-// TODO : Add other formats
 // TODO : UI stuff
 
 #[tauri::command]
