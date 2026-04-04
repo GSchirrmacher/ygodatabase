@@ -11,6 +11,11 @@ use commands::collection::{
     load_card_stubs,
     update_collection_amount,
 };
+use commands::altart::{
+    ensure_artwork_column,
+    get_alt_art_cards,
+    set_set_artwork,
+};
 use commands::deck::{
     get_ban_list,
     get_genesys_points,
@@ -39,6 +44,11 @@ fn main() {
                 .expect("Failed to open DB during setup");
             create_indexes(&conn)
                 .expect("Failed to create database indexes");
+            // Add artwork column — nullable with default 0, compatible with SQLite < 3.37
+            // Silently ignored if column already exists.
+            let _ = conn.execute_batch(
+                "ALTER TABLE card_sets ADD COLUMN artwork INTEGER DEFAULT 0;"
+            );
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -56,6 +66,9 @@ fn main() {
             save_deck,
             delete_deck,
             load_deck,
+            ensure_artwork_column,
+            get_alt_art_cards,
+            set_set_artwork,
             exit_app,
         ])
         .run(tauri::generate_context!())

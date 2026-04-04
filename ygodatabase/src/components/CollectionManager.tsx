@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { List } from "react-window";
 
 import type { CardStub, CardDetail, CardSet, CardSetRarity } from "../types/cards";
+import AltArtEditor from "./AltArtEditor";
 import { getRarityGroup, getFrameBackground, formatTypeline } from "../utils/cardUtils";
 import { rarityGroupColors, rarityGroupIcons } from "../constants/rarity";
 
@@ -18,6 +19,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
   const [search, setSearch] = useState<string>("");
   const [selectedCard, setSelectedCard] = useState<CardDetail | null>(null);
   const [collectionOnly, setCollectionOnly] = useState(false);
+  const [altArtMode, setAltArtMode] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [collectionValue, setCollectionValue] = useState<number>(0);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -25,6 +27,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
 
   useEffect(() => {
     invoke<string[]>("get_all_sets").then(setSets);
+    invoke("ensure_artwork_column").catch(() => {});
     invoke<number>("get_collection_value").then(setCollectionValue).catch(() => {});
   }, []);
 
@@ -289,8 +292,24 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
             >
               {collectionOnly ? "My Collection ✓" : "My Collection"}
             </button>
+            <button
+              onClick={() => setAltArtMode((v) => !v)}
+              style={{
+                background: altArtMode ? "rgba(212,175,55,0.15)" : undefined,
+                color: altArtMode ? "#f0d060" : undefined,
+                border: altArtMode ? "1px solid rgba(212,175,55,0.6)" : undefined,
+              }}
+            >
+              {altArtMode ? "✦ Alt Art Editor" : "Alt Art Editor"}
+            </button>
           </div>
         </div>
+        {/* ── ALT ART EDITOR OVERLAY ── */}
+        {altArtMode && (
+          <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <AltArtEditor />
+          </div>
+        )}
 
         {/* ── COLLECTION VALUE BAR ── */}
         <div style={{
@@ -324,6 +343,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
         </div>
 
         {/* ── MAIN CONTENT: grid + detail pane ── */}
+        {!altArtMode && (
         <div style={{ display: "flex", flexDirection: "row", gap: 20, padding: "16px 20px", flex: 1, minHeight: 0 }}>
 
           {/* LEFT: CARD GRID */}
@@ -451,6 +471,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
             )}
           </div>
         </div>
+      )}
       </div>
     </>
   );
