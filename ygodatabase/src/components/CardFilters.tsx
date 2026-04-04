@@ -57,7 +57,7 @@ export default function CardFilters({ filters, onChange, resultCount, loading, b
     if (val === "" || /^\d+$/.test(val)) set({ [key]: val });
   }
 
-  const isGenesys = banFormat === "genesys";
+  const isGenesys = banFormat?.toLowerCase() === "genesys";
   const isMonster = cat === "monster";
   const showSub = isMonster;                                         // subcategory picker
   const showAttr = isMonster;

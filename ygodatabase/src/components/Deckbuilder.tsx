@@ -103,7 +103,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
   const [deckTarget, setDeckTarget] = useState<DeckTarget>("main");
   const [banList, setBanList] = useState<BanList>({ forbidden: [], limited: [], semiLimited: [] });
   const [banFormat, setBanFormat] = useState<string>("TCG");
-  const [formatList] = useState<string[]>(["TCG", "OCG", "Master Duel", "GOAT", "OCG GOAT", "Edison", "Common Charity", "Duel Links", "Genesys"]);
+  const FORMATS = ["TCG", "OCG", "Master Duel", "GOAT", "OCG GOAT", "Edison", "Common Charity", "Duel Links", "Genesys"];
   const [collapsed, setCollapsed] = useState({ main: false, extra: false, side: false });
 
   // ── Save / load ───────────────────────────────────────────────────────────
@@ -147,6 +147,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
     invoke<Record<number, number>>("get_genesys_points").then(setGenesysPts).catch(() => {});
   }, []);
 
+  // Re-sync whenever the user switches format
   useEffect(() => {
     syncAndReload(banFormat);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -799,7 +800,7 @@ export default function Deckbuilder({ onBack }: DeckbuilderProps) {
               value={banFormat}
               onChange={(e) => setBanFormat(e.target.value)}
             >
-              {formatList.map((f) => (
+              {FORMATS.map((f) => (
                 <option key={f} value={f}>{f}</option>
               ))}
             </select>
