@@ -126,10 +126,15 @@ pub fn load_card_stubs(
             cs.collection_amount,
             c.level,
             cs.set_code,
-            COALESCE(c.genesys_points, 0) as genesys_points
+            COALESCE(c.genesys_points, 0) as genesys_points,
+            (ci.image_id - c.id) as artwork_index
         FROM cards c
-        LEFT JOIN card_images ci ON c.id = ci.card_id
-        LEFT JOIN card_sets cs ON c.id = cs.card_id
+        -- One row per distinct artwork: cross-join card_images so each image
+        -- gets its own stub, then join card_sets filtered to that artwork index.
+        LEFT JOIN card_images ci ON ci.card_id = c.id
+        LEFT JOIN card_sets cs
+            ON cs.card_id = c.id
+            AND COALESCE(cs.artwork, 0) = (ci.image_id - c.id)
         WHERE (:name IS NULL OR c.name LIKE :name)
           AND (:set IS NULL OR cs.set_name = :set)
           {frame_clause}
@@ -191,19 +196,19 @@ pub fn load_card_stubs(
         })
         .map_err(|e| e.to_string())?;
 
-    // Collapse duplicate rows (one per set×rarity) into a single stub per card.
-    // The ORDER BY is applied before this collapse, so the first row seen for
-    // each card already has the correct sort position — we preserve insertion
-    // order by using an IndexMap-style approach with a Vec for ordering.
-    let mut order: Vec<i64> = Vec::new();
-    let mut map: HashMap<i64, CardStub> = HashMap::new();
+    // Collapse rows into one stub per (card_id, image_id).
+    // Alt-art cards produce one stub per artwork — each with its own image and
+    // collection total counting only sets assigned to that artwork index.
+    let mut order: Vec<(i64, Option<i64>)> = Vec::new();
+    let mut map: HashMap<(i64, Option<i64>), CardStub> = HashMap::new();
     for r in rows {
         let r = r.map_err(|e| e.to_string())?;
         let collection_amount = r.collection_amount.unwrap_or(0);
-        if !map.contains_key(&r.id) {
-            order.push(r.id);
+        let key = (r.id, r.image_id);
+        if !map.contains_key(&key) {
+            order.push(key);
             let thumb = normalize_thumb_path(r.img_path.as_ref());
-            map.insert(r.id, CardStub {
+            map.insert(key, CardStub {
                 id: r.id,
                 name: r.name.clone(),
                 card_type: r.card_type.clone(),
@@ -219,21 +224,23 @@ pub fn load_card_stubs(
                 genesys_points: r.genesys_points,
             });
         }
-        let stub = map.get_mut(&r.id).unwrap();
+        let stub = map.get_mut(&key).unwrap();
         stub.rarities.push(r.set_rarity);
         stub.total_collection_amount += collection_amount;
     }
 
-    // Return in sorted order (order vec preserves first-seen position per card)
-    Ok(order.into_iter().filter_map(|id| map.remove(&id)).collect())
+    Ok(order.into_iter().filter_map(|key| map.remove(&key)).collect())
 }
 
 // ---------------------------------------------------------------------------
 // Detail
 // ---------------------------------------------------------------------------
 #[tauri::command]
-pub fn load_card_detail(card_id: i64, set_name: Option<String>) -> Result<CardDetail, String> {
+pub fn load_card_detail(card_id: i64, set_name: Option<String>, artwork: Option<i64>) -> Result<CardDetail, String> {
     let conn = open_db()?;
+    // artwork_index: which artwork variant to show (0 = base, 1 = first alt, etc.)
+    // Defaults to 0 if not provided (non-alt-art cards never send this param).
+    let artwork_index = artwork.unwrap_or(0);
 
     let sql = "
         SELECT
@@ -257,18 +264,23 @@ pub fn load_card_detail(card_id: i64, set_name: Option<String>) -> Result<CardDe
             c.linkval,
             c.typeline,
             cs.collection_amount,
-            cs.set_price
+            cs.set_price,
+            COALESCE(cs.artwork, 0) as artwork
         FROM cards c
-        LEFT JOIN card_images ci ON c.id = ci.card_id
         LEFT JOIN card_sets cs ON c.id = cs.card_id
+            AND COALESCE(cs.artwork, 0) = :artwork
+        LEFT JOIN card_images ci
+            ON ci.card_id = c.id
+            AND ci.image_id = c.id + :artwork
         WHERE c.id = :card_id
           AND (:set_name IS NULL OR cs.set_name = :set_name)
+        ORDER BY cs.set_code, cs.set_rarity
     ";
 
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map(named_params! { ":card_id": card_id, ":set_name": set_name }, |row| {
+        .query_map(named_params! { ":card_id": card_id, ":set_name": set_name, ":artwork": artwork_index }, |row| {
             Ok(RawDetailRow {
                 id: row.get("id")?,
                 name: row.get("name")?,
@@ -295,6 +307,7 @@ pub fn load_card_detail(card_id: i64, set_name: Option<String>) -> Result<CardDe
                 set_price: row.get::<_, Option<String>>("set_price").ok().flatten()
                     .and_then(|s| s.parse::<f64>().ok())
                     .filter(|&v| v > 0.0),
+                artwork: row.get::<_, i64>("artwork").unwrap_or(0),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -340,6 +353,7 @@ pub fn load_card_detail(card_id: i64, set_name: Option<String>) -> Result<CardDe
                 rarity: r.set_rarity.clone(),
                 collection_amount: r.collection_amount,
                 set_price: r.set_price,
+                artwork: r.artwork,
             });
         }
     }
@@ -413,6 +427,7 @@ pub fn update_collection_amount(
     card_id: i64,
     set_code: String,
     rarity: String,
+    artwork: i64,
     amount: i64,
 ) -> Result<(), String> {
     let conn = open_db()?;
@@ -421,8 +436,9 @@ pub fn update_collection_amount(
          SET collection_amount = ?1
          WHERE card_id = ?2
            AND set_code = ?3
-           AND set_rarity = ?4",
-        (amount, card_id, set_code, rarity),
+           AND set_rarity = ?4
+           AND COALESCE(artwork, 0) = ?5",
+        (amount, card_id, set_code, rarity, artwork),
     ).map_err(|e| e.to_string())?;
     Ok(())
 }

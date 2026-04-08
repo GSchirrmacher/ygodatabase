@@ -15,6 +15,8 @@ use commands::altart::{
     ensure_artwork_column,
     get_alt_art_cards,
     set_set_artwork,
+    add_set_entry,
+    remove_set_entry,
 };
 use commands::deck::{
     get_ban_list,
@@ -44,11 +46,44 @@ fn main() {
                 .expect("Failed to open DB during setup");
             create_indexes(&conn)
                 .expect("Failed to create database indexes");
-            // Add artwork column — nullable with default 0, compatible with SQLite < 3.37
-            // Silently ignored if column already exists.
-            let _ = conn.execute_batch(
-                "ALTER TABLE card_sets ADD COLUMN artwork INTEGER DEFAULT 0;"
-            );
+            // Migrate card_sets: update unique key to include artwork so the same
+            // rarity can exist in multiple artworks of the same set.
+            // Detects old schema by checking whether the unique constraint already
+            // includes artwork — if not, recreates the table with the correct key.
+            let table_sql: String = conn
+                .query_row(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='card_sets'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or_default();
+            // Old schema: UNIQUE(card_id, set_code, set_rarity) — no artwork in key
+            // New schema: UNIQUE(card_id, set_code, set_rarity, artwork)
+            let needs_migration = !table_sql.contains("set_rarity, artwork")
+                && !table_sql.contains("set_rarity,artwork");
+            if needs_migration {
+                conn.execute_batch("
+                    BEGIN;
+                    CREATE TABLE IF NOT EXISTS card_sets_new (
+                        card_id           INTEGER,
+                        set_code          TEXT,
+                        set_name          TEXT,
+                        set_rarity        TEXT,
+                        set_price         TEXT,
+                        collection_amount INTEGER DEFAULT 0,
+                        artwork           INTEGER DEFAULT 0,
+                        UNIQUE(card_id, set_code, set_rarity, artwork)
+                    );
+                    INSERT OR IGNORE INTO card_sets_new
+                        (card_id, set_code, set_name, set_rarity, set_price, collection_amount, artwork)
+                    SELECT card_id, set_code, set_name, set_rarity, set_price,
+                           COALESCE(collection_amount, 0), COALESCE(artwork, 0)
+                    FROM card_sets;
+                    DROP TABLE card_sets;
+                    ALTER TABLE card_sets_new RENAME TO card_sets;
+                    COMMIT;
+                ").expect("Failed to migrate card_sets schema");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -69,6 +104,8 @@ fn main() {
             ensure_artwork_column,
             get_alt_art_cards,
             set_set_artwork,
+            add_set_entry,
+            remove_set_entry,
             exit_app,
         ])
         .run(tauri::generate_context!())

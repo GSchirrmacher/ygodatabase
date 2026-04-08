@@ -1,4 +1,5 @@
-use serde::Serialize;
+use rusqlite::named_params;
+use serde::{Deserialize, Serialize};
 use crate::db::open_db;
 
 // ---------------------------------------------------------------------------
@@ -9,9 +10,9 @@ use crate::db::open_db;
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtworkVariant {
-    pub artwork_index: i64, // 0 = base, 1 = first alt, etc.
+    pub artwork_index: i64,  // 0 = base, 1 = first alt, etc.
     pub image_id: i64,
-    pub img_path: String, // asset:// URL
+    pub img_path: String,    // asset:// URL
     pub img_thumb_path: Option<String>,
 }
 
@@ -32,22 +33,76 @@ pub struct AltArtSetEntry {
     pub set_code: String,
     pub set_name: Option<String>,
     pub set_rarity: Option<String>,
-    pub artwork: i64, // current artwork index (0 = base)
+    pub artwork: i64,        // current artwork index (0 = base)
 }
 
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
 
-/// Ensure the `artwork` column exists on `card_sets` (idempotent migration).
+/// Migrates `card_sets` so that:
+/// 1. The `artwork` column exists (INTEGER DEFAULT 0).
+/// 2. The unique key is (card_id, set_code, set_rarity, artwork) instead of
+///    (card_id, set_code, set_rarity) — this allows the same rarity to appear
+///    in both artwork 0 and artwork 1 of the same set.
+///
+/// Idempotent: checks whether the migration is already done before acting.
 #[tauri::command]
 pub fn ensure_artwork_column() -> Result<(), String> {
     let conn = open_db()?;
-    // ADD COLUMN IF NOT EXISTS is not supported in old SQLite — use a try/ignore pattern
-    let _ = conn.execute(
-        "ALTER TABLE card_sets ADD COLUMN artwork INTEGER NOT NULL DEFAULT 0",
-        [],
-    );
+
+    // Check if the artwork column already exists
+    let has_artwork: bool = conn
+        .prepare("SELECT artwork FROM card_sets LIMIT 1")
+        .is_ok();
+
+    // Check whether the unique constraint already includes artwork
+    // by inspecting the table definition
+    let table_sql: String = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='card_sets'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or_default();
+
+    let needs_migration = !table_sql.contains("set_rarity, artwork")
+        && !table_sql.contains("set_rarity,artwork");
+
+    if !needs_migration {
+        return Ok(());
+    }
+
+    // Recreate the table with the correct schema:
+    // UNIQUE(card_id, set_code, set_rarity, artwork)
+    conn.execute_batch("
+        BEGIN;
+
+        CREATE TABLE IF NOT EXISTS card_sets_new (
+            card_id           INTEGER,
+            set_code          TEXT,
+            set_name          TEXT,
+            set_rarity        TEXT,
+            set_price         TEXT,
+            collection_amount INTEGER DEFAULT 0,
+            artwork           INTEGER DEFAULT 0,
+            UNIQUE(card_id, set_code, set_rarity, artwork)
+        );
+
+        INSERT OR IGNORE INTO card_sets_new
+            (card_id, set_code, set_name, set_rarity, set_price, collection_amount, artwork)
+        SELECT
+            card_id, set_code, set_name, set_rarity, set_price,
+            COALESCE(collection_amount, 0),
+            COALESCE(artwork, 0)
+        FROM card_sets;
+
+        DROP TABLE card_sets;
+        ALTER TABLE card_sets_new RENAME TO card_sets;
+
+        COMMIT;
+    ").map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
@@ -117,10 +172,10 @@ pub fn get_alt_art_cards() -> Result<Vec<AltArtCard>, String> {
         let set_entries: Vec<AltArtSetEntry> = set_stmt
             .query_map([card_id], |row| {
                 Ok(AltArtSetEntry {
-                    set_code: row.get(0)?,
-                    set_name: row.get(1)?,
+                    set_code:  row.get(0)?,
+                    set_name:  row.get(1)?,
                     set_rarity: row.get(2)?,
-                    artwork: row.get(3)?,
+                    artwork:   row.get(3)?,
                 })
             })
             .map_err(|e| e.to_string())?
@@ -133,13 +188,49 @@ pub fn get_alt_art_cards() -> Result<Vec<AltArtCard>, String> {
     Ok(result)
 }
 
-/// Update the artwork index for a specific (card_id, set_code) row.
+/// Update the artwork index for a specific (card_id, set_code, set_rarity) row.
 #[tauri::command]
-pub fn set_set_artwork(card_id: i64, set_code: String, artwork: i64) -> Result<(), String> {
+pub fn set_set_artwork(card_id: i64, set_code: String, set_rarity: String, artwork: i64) -> Result<(), String> {
     let conn = open_db()?;
     conn.execute(
-        "UPDATE card_sets SET artwork = ?1 WHERE card_id = ?2 AND set_code = ?3",
-        (artwork, card_id, set_code),
+        "UPDATE card_sets SET artwork = ?1 WHERE card_id = ?2 AND set_code = ?3 AND set_rarity = ?4",
+        (artwork, card_id, set_code, set_rarity),
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Remove a specific (card_id, set_code, set_rarity, artwork) row from card_sets.
+#[tauri::command]
+pub fn remove_set_entry(card_id: i64, set_code: String, set_rarity: String, artwork: i64) -> Result<(), String> {
+    let conn = open_db()?;
+    conn.execute(
+        "DELETE FROM card_sets WHERE card_id = ?1 AND set_code = ?2 AND set_rarity = ?3 AND artwork = ?4",
+        (card_id, &set_code, &set_rarity, artwork),
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Insert a new card_sets row. The unique key is (card_id, set_code, set_rarity, artwork)
+/// so the same rarity can exist in both artwork 0 and artwork 1 of the same set.
+#[tauri::command]
+pub fn add_set_entry(card_id: i64, set_code: String, set_name: String, set_rarity: String, artwork: i64) -> Result<(), String> {
+    let conn = open_db()?;
+    // Check it doesn't already exist
+    let exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM card_sets WHERE card_id=?1 AND set_code=?2 AND set_rarity=?3 AND artwork=?4",
+            (card_id, &set_code, &set_rarity, artwork),
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|n| n > 0)
+        .unwrap_or(false);
+    if exists {
+        return Err(format!("Entry ({}, {}, artwork={}) already exists", set_code, set_rarity, artwork));
+    }
+    conn.execute(
+        "INSERT INTO card_sets (card_id, set_code, set_name, set_rarity, set_price, collection_amount, artwork)
+         VALUES (?1, ?2, ?3, ?4, '0', 0, ?5)",
+        (card_id, &set_code, &set_name, &set_rarity, artwork),
     ).map_err(|e| e.to_string())?;
     Ok(())
 }

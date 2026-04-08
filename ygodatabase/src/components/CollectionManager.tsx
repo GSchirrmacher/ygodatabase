@@ -66,6 +66,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
       const detail = await invoke<CardDetail>("load_card_detail", {
         cardId: stub.id,
         setName: selectedSet === "ALL" ? null : selectedSet,
+        artwork: stub.imageId != null ? stub.imageId - stub.id : 0,
       });
       setSelectedCard(detail);
     } finally {
@@ -372,7 +373,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
                           const primaryIcon = rarityGroupIcons[getRarityGroup(firstRarity)];
                           return (
                             <div
-                              key={`${c.id}-${c.imageId ?? "base"}`}
+                              key={`${c.id}-${c.imageId ?? 0}`}
                               style={{
                                 position: "relative",
                                 cursor: "pointer",

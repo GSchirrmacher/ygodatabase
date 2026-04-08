@@ -6,6 +6,7 @@ pub struct CardSetRarity {
     pub rarity: Option<String>,
     pub collection_amount: Option<i64>,
     pub set_price: Option<f64>,
+    pub artwork: i64,
 }
 
 #[derive(Serialize, Clone)]
@@ -99,4 +100,5 @@ pub struct RawDetailRow {
     pub typeline: Option<Vec<String>>,
     pub collection_amount: Option<i64>,
     pub set_price: Option<f64>,
+    pub artwork: i64,
 }

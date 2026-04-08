@@ -18,6 +18,7 @@ export interface CardSetRarity {
   rarity?: string;
   collectionAmount?: number;
   setPrice?: number;
+  artwork: number;
 }
 
 export interface CardSet {
