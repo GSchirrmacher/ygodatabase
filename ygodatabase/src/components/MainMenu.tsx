@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useRef, useState } from "react";
 
 interface MainMenuProps {
   onNavigate: (screen: "collection" | "deckbuilder") => void;
@@ -7,6 +8,10 @@ interface MainMenuProps {
 
 export default function MainMenu({ onNavigate }: MainMenuProps) {
   const [visible, setVisible] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncLog, setSyncLog] = useState<string[]>([]);
+  const [syncDone, setSyncDone] = useState<"idle" | "ok" | "error">("idle");
+  const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Staggered entrance — tiny delay so the browser has painted first
@@ -16,8 +21,32 @@ export default function MainMenu({ onNavigate }: MainMenuProps) {
 
   function handleExit() {
     invoke("exit_app").catch(() => {
-      // Fallback if command isn't registered yet
       window.close();
+    });
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncLog([]);
+    setSyncDone("idle");
+
+    const unlisten = await listen<string>("sync-progress", (e) => {
+      setSyncLog((prev) => [...prev, e.payload]);
+      logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
+    const unlistenDone = await listen<string>("sync-done", (e) => {
+      setSyncDone(e.payload === "ok" ? "ok" : "error");
+      setSyncing(false);
+      unlisten();
+      unlistenDone();
+    });
+
+    invoke("run_sync").catch((err: string) => {
+      setSyncLog((prev) => [...prev, `ERROR: ${err}`]);
+      setSyncDone("error");
+      setSyncing(false);
+      unlisten();
+      unlistenDone();
     });
   }
 
@@ -286,10 +315,71 @@ export default function MainMenu({ onNavigate }: MainMenuProps) {
             <button className="mm-btn mm-btn-exit" onClick={handleExit}>
               ✕ &nbsp; Exit
             </button>
+            <button
+              className="mm-btn mm-btn-secondary"
+              style={{ fontSize: 12, padding: "10px 32px", marginTop: 4 }}
+              onClick={handleSync}
+              disabled={syncing}
+            >
+              {syncing ? "⟳ Syncing…" : "↺ &nbsp; Sync Database"}
+            </button>
           </div>
 
         </div>
       </div>
+      {/* ── SYNC MODAL ── */}
+      {(syncing || syncDone !== "idle") && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)",
+          display: "flex", flexDirection: "column", alignItems: "center",
+          justifyContent: "center", zIndex: 999, padding: 32,
+        }}>
+          <div style={{
+            width: "100%", maxWidth: 640,
+            background: "#0d0f14", border: "1px solid rgba(212,175,55,0.2)",
+            borderRadius: 8, display: "flex", flexDirection: "column",
+            maxHeight: "70vh", overflow: "hidden",
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: "12px 16px", borderBottom: "1px solid rgba(212,175,55,0.1)",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+            }}>
+              <span style={{ fontFamily: "'Cinzel',serif", color: "#f0d060", fontSize: 13 }}>
+                {syncing ? "⟳ Database Sync in Progress…" : syncDone === "ok" ? "✓ Sync Complete" : "✕ Sync Failed"}
+              </span>
+              {!syncing && (
+                <button
+                  onClick={() => setSyncDone("idle")}
+                  style={{
+                    background: "transparent", border: "none",
+                    color: "rgba(200,150,40,0.6)", cursor: "pointer", fontSize: 16,
+                  }}
+                >✕</button>
+              )}
+            </div>
+            {/* Log */}
+            <div style={{
+              flex: 1, overflowY: "auto", padding: "10px 14px",
+              fontFamily: "monospace", fontSize: 11, color: "#aaa",
+              lineHeight: 1.7,
+            }}>
+              {syncLog.map((line, i) => (
+                <div key={i} style={{
+                  color: line.startsWith("ERROR") || line.startsWith("[stderr]")
+                    ? "#e05555"
+                    : line.startsWith("===")
+                      ? "#f0d060"
+                      : "#aaa"
+                }}>
+                  {line}
+                </div>
+              ))}
+              <div ref={logEndRef} />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

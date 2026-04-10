@@ -76,7 +76,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
 
   async function updateCollection(
     e: React.MouseEvent,
-    row: { id: number; setCode?: string; rarity?: string; collectionAmount?: number },
+    row: { id: number; setCode?: string; rarity?: string; artwork: number; collectionAmount?: number },
     delta: number
   ) {
     e.preventDefault();
@@ -87,6 +87,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
         cardId: row.id,
         setCode: row.setCode,
         rarity: row.rarity,
+        artwork: row.artwork,
         amount: newValue,
       });
     } catch (err) {
@@ -103,7 +104,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
           s.setCode !== row.setCode ? s : {
             ...s,
             rarities: s.rarities.map((r) =>
-              r.rarity !== row.rarity ? r : { ...r, collectionAmount: newValue }
+              r.rarity !== row.rarity || r.artwork !== row.artwork ? r : { ...r, collectionAmount: newValue }
             ),
           }
         ),
@@ -165,13 +166,13 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
 
   function renderRarityRow(r: {
     id: number; setCode?: string; rarity?: string;
-    collectionAmount?: number; setPrice?: number;
+    artwork: number; collectionAmount?: number; setPrice?: number;
   }) {
     const group = getRarityGroup(r.rarity);
     const icon = rarityGroupIcons[group];
-    const formattedPrice = r.setPrice != null ? `$${r.setPrice.toFixed(2)}` : "–";
+    const formattedPrice = r.setPrice != null ? `${r.setPrice.toFixed(2)}€` : "–";
     return (
-      <div key={`${r.id}-${r.setCode}-${r.rarity}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div key={`${r.id}-${r.setCode}-${r.rarity}-${r.artwork}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {icon && <img src={icon} style={{ height: 20 }} alt={r.rarity} />}
         <span style={{ minWidth: 20, textAlign: "right" }}>{r.collectionAmount ?? 0}</span>
         <button onClick={(e) => updateCollection(e, r, 1)}>+</button>
@@ -339,7 +340,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
             color: collectionValue > 0 ? "#4caf50" : "rgba(200,150,40,0.3)",
             letterSpacing: "0.05em",
           }}>
-            ${collectionValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {collectionValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
           </span>
         </div>
 
@@ -461,6 +462,7 @@ export default function CollectionManager({ onBack }: CollectionManagerProps) {
                           id: selectedCard.id,
                           setCode: set.setCode,
                           rarity: r.rarity,
+                          artwork: r.artwork,
                           collectionAmount: r.collectionAmount,
                           setPrice: r.setPrice,
                         })
